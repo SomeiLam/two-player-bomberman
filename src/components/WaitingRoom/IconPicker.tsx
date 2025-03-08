@@ -45,7 +45,7 @@ const IconPicker = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 bg-white/5 rounded-2xl backdrop-blur-sm">
+    <div className="p-4 sm:p-6 rounded-2xl">
       <h3 className="text-white sm:text-xl font-semibold mb-2 sm:mb-6">
         Choose Your Character
       </h3>
@@ -56,7 +56,7 @@ const IconPicker = () => {
             <button
               key={index}
               className={classNames(
-                'group relative aspect-square p-2 sm:p-4 rounded sm:rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(219,39,119,0.2)]',
+                'group relative icon-square aspect-square p-2 sm:p-4 rounded sm:rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(219,39,119,0.2)]',
                 {
                   'hover:bg-blue/20': icon === Icon,
                   'hover:bg-white/20': icon !== Icon,

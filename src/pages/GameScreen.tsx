@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Heart, Bomb, BrickWall, ArrowLeft } from 'lucide-react'
+import { Heart, BrickWall, ArrowLeft } from 'lucide-react'
 import { onValue, ref, remove, update } from 'firebase/database'
 import { database } from '../firebase'
 import { usePlayer } from '../context/PlayerContext'
 import { useNavigate } from 'react-router-dom'
 import FloatingEmoji from '../components/Game/FloatingEmoji'
 import EmojiPanel from '../components/Game/EmojiPanel'
+import { getIconComponent } from '../components/getIconComponent'
 
 // Emoji reactions
 const emojis = ['😄', '😮', '😱', '🤪', '😎', '🤯', '❤️']
@@ -64,6 +65,13 @@ const GameScreen = () => {
   }, [roomId])
   console.log(roomState)
 
+  const IconComponent1 = getIconComponent(
+    roomState?.players?.player1?.icon || 'Cat'
+  )
+  const IconComponent2 = getIconComponent(
+    roomState?.players?.player2?.icon || 'Squirrel'
+  )
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col p-4 sm:p-8">
       {/* Exit Button */}
@@ -79,19 +87,22 @@ const GameScreen = () => {
       {/* Game Header - Responsive layout */}
       <div className="flex flex-row justify-between items-center gap-4 sm:gap-8 my-6 sm:my-8">
         {/* Player 1 Stats */}
-        <div className="flex items-center justify-between gap-1 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-pink-500" />
+        <div className="flex items-center justify-between gap-2 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
+          <IconComponent1 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-pink-500/50" />
+
           <div>
             <p className="text-white font-bold text-center text-xs sm:text-xl truncate">
-              Player 1
+              {roomState?.players?.player1?.name || 'Player 1'}
             </p>
             <div className="flex gap-1">
-              {[...Array(3)].map((_, i) => (
-                <Heart
-                  key={i}
-                  className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
-                />
-              ))}
+              {[...Array(roomState?.players?.player1?.health || 3)].map(
+                (_, i) => (
+                  <Heart
+                    key={i}
+                    className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
+                  />
+                )
+              )}
             </div>
           </div>
         </div>
@@ -99,21 +110,23 @@ const GameScreen = () => {
         <div className="text-2xl sm:text-4xl font-bold text-white">2:30</div>
 
         {/* Player 2 Stats */}
-        <div className="flex items-center justify-between gap-1 sm:gap-4 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
+        <div className="flex items-center justify-between gap-2 sm:gap-4 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
           <div>
             <p className="text-white font-bold text-center text-xs sm:text-xl truncate">
-              Player 2
+              {roomState?.players?.player2?.name || 'Player 2'}
             </p>
             <div className="flex gap-1">
-              {[...Array(3)].map((_, i) => (
-                <Heart
-                  key={i}
-                  className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
-                />
-              ))}
+              {[...Array(roomState?.players?.player2?.health || 3)].map(
+                (_, i) => (
+                  <Heart
+                    key={i}
+                    className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
+                  />
+                )
+              )}
             </div>
           </div>
-          <div className="w-12 h-12 rounded-full bg-purple-500" />
+          <IconComponent2 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-blue-500/50" />
         </div>
       </div>
 
