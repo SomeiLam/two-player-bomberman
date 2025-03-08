@@ -44,9 +44,24 @@ This project is a simple, real-time, two-player game inspired by Bomberman. Usin
 - **Frontend:** React, TypeScript, CSS (with advanced animations)
 - **Backend:** Firebase Realtime Database (and optionally Firebase Authentication for secure access)
 
-## Setup and Installation
+## Project Roadmap
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/someilam/two-player-bomberman.git
-   cd two-player-bomberman
+- **Phase 1: MVP**
+  - Implement the Home Page and Waiting Room.
+  - Create a basic Game Screen with a static bomberman board.
+
+- **Phase 2: Core Game Mechanics**
+  - Implement player movement and collision detection.
+  - Develop bomb placement and explosion logic.
+  - Integrate health management and game-over conditions.
+
+- **Phase 3: Real-Time Synchronization**
+  - Integrate Firebase to sync game state (player positions, bombs, health, etc.) in real time.
+
+- **Phase 4: Enhancements and UI Polish**
+  - Apply advanced CSS animations for a smoother, more engaging experience.
+  - Optimize UI/UX based on user feedback.
+
+- **Phase 5: Testing and Optimization**
+  - Write unit and integration tests.
+  - Optimize performance and scalability for future enhancements.

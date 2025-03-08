@@ -1,0 +1,11 @@
+export type UserIcon =
+  | 'Cat'
+  | 'Squirrel'
+  | 'Dog'
+  | 'Rabbit'
+  | 'Turtle'
+  | 'Bird'
+  | 'Baby'
+  | 'Ghost'
+  | 'Fish'
+  | 'Rat'
