@@ -22,10 +22,24 @@ const WaitingRoom = () => {
   }
 
   const handleStartGame = async () => {
-    const board = generateBoard() // Create a new 11x11 board
+    const boardData = generateBoard() // Create a new 11x11 board
     if (roomId) {
       const roomRef = ref(database, `gameRooms/${roomId}`)
-      await update(roomRef, { board, status: 'in-progress' })
+      await update(roomRef, {
+        'players/player1/position': {
+          x: boardData.player1Position.col,
+          y: boardData.player1Position.row,
+        },
+        'players/player2/position': {
+          x: boardData.player2Position.col,
+          y: boardData.player2Position.row,
+        },
+      })
+      await update(roomRef, {
+        board: boardData.board,
+        bombs: [],
+        status: 'in-progress',
+      })
     }
   }
 
@@ -63,7 +77,7 @@ const WaitingRoom = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [])
-  console.log('explosionActive', explosionActive)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
       {explosionActive && (

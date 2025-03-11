@@ -26,7 +26,7 @@ const EmojiPanel: React.FC<EmojiPanelProps> = ({ emojis, onEmojiSend }) => {
   }, [])
 
   return (
-    <div className="flex justify-center gap-2 sm:gap-12 w-full order-2 sm:order-1 mt-5 sm:mt-10">
+    <div className="flex justify-center gap-2 sm:gap-12 w-full mt-5 sm:mt-10">
       {emojis.map((emoji, i) => (
         <div key={i} className="relative">
           <span className="hidden sm:block text-white/50 text-2xl absolute">
