@@ -13,7 +13,7 @@ const WaitingRoom = () => {
   const [roomState, setRoomState] = useState<any>(null)
   const [explosionActive, setExplosionActive] = useState(false)
   const roomId = 'roomId_123'
-  const { currentPlayer } = usePlayer()
+  const { currentPlayer, playerName } = usePlayer()
   const navigate = useNavigate()
 
   const handleExit = async () => {
@@ -45,8 +45,16 @@ const WaitingRoom = () => {
 
   // Function to remove the current player's data from Firebase.
   const cleanupPlayer = async () => {
-    await remove(ref(database, `gameRooms/${roomId}/players/${currentPlayer}`))
-    // Optionally, remove the entire room if no players remain.
+    console.log(roomState.players)
+    if (Object.keys(roomState.players).length === 2) {
+      await remove(
+        ref(database, `gameRooms/${roomId}/players/${currentPlayer}`)
+      )
+    } else if (Object.keys(roomState.players).length === 1) {
+      await remove(ref(database, `gameRooms/${roomId}}`))
+    }
+
+    //  remove the entire room if no players remain.
   }
 
   useEffect(() => {
@@ -65,6 +73,7 @@ const WaitingRoom = () => {
       setRoomState(data)
     })
 
+    if (!playerName) navigate('/')
     // Attach a listener for page unload (closing the tab or browser)
     const handleBeforeUnload = async () => {
       await cleanupPlayer()

@@ -14,6 +14,7 @@ const initialPlayer = {
     y: 0,
   },
   emoji: null,
+  direction: 'down',
 }
 
 const HomeScreen = () => {
@@ -31,7 +32,7 @@ const HomeScreen = () => {
     if (snapshot.exists()) {
       // The room exists; check if player1 is already set
       const data = snapshot.val()
-      if (data.players && data.players.player1) {
+      if (data?.players?.player1) {
         if (!playerName) {
           playerName = 'Jujube'
         }

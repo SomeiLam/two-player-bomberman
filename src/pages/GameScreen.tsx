@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Heart, BrickWall, ArrowLeft } from 'lucide-react'
-import { get, onValue, ref, remove, update } from 'firebase/database'
+import { ArrowLeft } from 'lucide-react'
+import {
+  onValue,
+  push,
+  ref,
+  runTransaction,
+  set,
+  update,
+} from 'firebase/database'
 import { database } from '../firebase'
 import { usePlayer } from '../context/PlayerContext'
 import { useNavigate } from 'react-router-dom'
 import FloatingEmoji from '../components/Game/FloatingEmoji'
 import EmojiPanel from '../components/Game/EmojiPanel'
-import { getIconComponent } from '../components/getIconComponent'
 import GameBoard from '../components/Game/GameBoard'
+import GameInfo from '../components/Game/GameInfo'
 
 // Emoji reactions
 const emojis = ['😄', '😮', '😱', '🤪', '😎', '🤯', '❤️']
@@ -15,9 +22,216 @@ const THRESHOLD = 100 * 1000
 
 const GameScreen = () => {
   const [roomState, setRoomState] = useState<any>(null)
-  const { currentPlayer, roomId } = usePlayer()
+  const { currentPlayer, playerName, roomId } = usePlayer()
 
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don’t interfere if we have no room or no current player
+      if (!roomId || !currentPlayer) return
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.keyCode == 32) {
+        e.preventDefault() // Prevent scrolling
+      }
+
+      // Check if the space bar (bomb planting) was pressed
+      if (e.keyCode === 32) {
+        // Bomb planting logic here; you can replace currentX/Y with your actual position values.
+        handlePlantBomb()
+        return // Exit early to avoid executing movement logic
+      }
+
+      let newDirection: 'up' | 'down' | 'left' | 'right' | null = null
+      let deltaX = 0
+      let deltaY = 0
+
+      switch (e.key) {
+        case 'ArrowUp':
+          newDirection = 'up'
+          deltaY = -1
+          break
+        case 'ArrowDown':
+          newDirection = 'down'
+          deltaY = 1
+          break
+        case 'ArrowLeft':
+          newDirection = 'left'
+          deltaX = -1
+          break
+        case 'ArrowRight':
+          newDirection = 'right'
+          deltaX = 1
+          break
+        default:
+          return // ignore other keys
+      }
+
+      // If we got a direction, update the DB
+      if (newDirection) {
+        // Retrieve the current player’s position from roomState if available
+        const playerState = roomState?.players?.[currentPlayer]
+        if (!playerState?.position) return
+
+        const oldX = playerState.position.x
+        const oldY = playerState.position.y
+
+        // Compute new position
+        const newX = oldX + deltaX
+        const newY = oldY + deltaY
+
+        // (Optional) Check if new position is valid or blocked by a wall
+        const board = roomState?.board
+        if (board) {
+          const cell = board[newY]?.[newX]
+          // If the cell is a wall or out of bounds, do nothing
+          if (!cell || cell.type === 'wall' || cell.type === 'obstacle') {
+            return
+          }
+        }
+
+        // Update the player’s direction and position in Firebase
+        const playerRef = ref(
+          database,
+          `gameRooms/${roomId}/players/${currentPlayer}`
+        )
+        update(playerRef, {
+          direction: newDirection,
+          position: { x: newX, y: newY },
+        })
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [roomId, currentPlayer, roomState])
+
+  const handlePlantBomb = () => {
+    const currentPosition =
+      currentPlayer === 'player1'
+        ? roomState.players?.player1?.position
+        : roomState.players?.player2?.position
+    const bomb = {
+      x: currentPosition.x,
+      y: currentPosition.y,
+      plantedAt: Date.now(),
+      plantedBy: currentPlayer,
+    }
+
+    const bombsRef = ref(database, `gameRooms/${roomId}/bombs`)
+
+    runTransaction(bombsRef, (currentBombs) => {
+      const now = Date.now()
+      // Ensure currentBombs is an array; if not, initialize it as empty
+      const bombsArray = Array.isArray(currentBombs) ? currentBombs : []
+
+      // Count active bombs for the current player (bombs planted within the last 3 seconds)
+      const playerActiveBombCount = bombsArray.filter(
+        (b) => b.plantedBy === currentPlayer && now - b.plantedAt < 3000
+      ).length
+
+      // If the current player has 5 or more active bombs, do not add a new bomb
+      if (playerActiveBombCount >= 3) {
+        return bombsArray
+      }
+
+      // Add the new bomb without removing expired bombs
+      return [...bombsArray, bomb]
+    })
+  }
+
+  const applyBombExplosions = (room: any) => {
+    // Use the room parameter from Firebase instead of roomState
+    if (!room || !room.board || !room.bombs || !room.players) {
+      return room // Nothing to do if the room data is missing
+    }
+    const now = Date.now()
+    const bombsArray = Array.isArray(room.bombs) ? room.bombs : []
+
+    // We'll track indices of bombs that are done exploding (bombAge >= 4000)
+    const bombsToRemove = []
+
+    bombsArray.forEach((bomb, index) => {
+      const bombAge = now - bomb.plantedAt
+
+      // If bomb is currently exploding (3-4 seconds after planting)
+      if (bombAge >= 3000 && bombAge < 4000) {
+        // The bomb affects its own cell and adjacent cells (up, down, left, right)
+        explodeCell(room, bomb.x, bomb.y)
+        explodeCell(room, bomb.x, bomb.y - 1)
+        explodeCell(room, bomb.x, bomb.y + 1)
+        explodeCell(room, bomb.x - 1, bomb.y)
+        explodeCell(room, bomb.x + 1, bomb.y)
+      }
+
+      // If bomb is older than 4 seconds, mark it to remove
+      if (bombAge >= 4000) {
+        bombsToRemove.push(index)
+      }
+    })
+
+    // Remove bombs that finished exploding
+    bombsToRemove
+      .sort((a, b) => b - a)
+      .forEach((idx) => {
+        bombsArray.splice(idx, 1)
+      })
+
+    // Store back updated bombs array
+    room.bombs = bombsArray
+
+    return room
+  }
+
+  const explodeCell = (room: any, x: number, y: number) => {
+    // Ensure x, y are in range
+    if (y < 0 || y >= room.board.length || x < 0 || x >= room.board[0].length) {
+      return
+    }
+
+    const cell = room.board[y][x]
+    // If it's a wall, no effect
+    if (cell.type === 'wall') {
+      return
+    }
+
+    // If it's an obstacle, destroy it (turn into an empty cell)
+    if (cell.type === 'obstacle') {
+      cell.type = 'empty'
+    }
+
+    // Damage players if they're in this cell
+    const p1 = room.players.player1
+    const p2 = room.players.player2
+
+    if (p1 && p1.position && p1.position.x === x && p1.position.y === y) {
+      if (p1.health > 0) {
+        p1.health = p1.health - 1
+        console.log(`Player1 hit at (${x}, ${y}). New health: ${p1.health}`)
+      }
+    }
+    if (p2 && p2.position && p2.position.x === x && p2.position.y === y) {
+      if (p2.health > 0) {
+        p2.health = p2.health - 1
+        console.log(`Player2 hit at (${x}, ${y}). New health: ${p2.health}`)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!roomId) return
+
+    const interval = setInterval(() => {
+      const roomRef = ref(database, `gameRooms/${roomId}`)
+      runTransaction(roomRef, (room) => {
+        if (!room) return room // If room is null, nothing to do.
+        const updatedRoom = applyBombExplosions(room)
+        return updatedRoom
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [roomId])
 
   const handleExit = async () => {
     if (roomState?.status === 'in-progress') {
@@ -53,9 +267,13 @@ const GameScreen = () => {
     const roomRef = ref(database, `gameRooms/${roomId}`)
     const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val()
-      setRoomState(data)
+      if (data.board) {
+        setRoomState(data)
+      }
       if (data.status === 'waiting') navigate('/waiting')
     })
+
+    if (!playerName) navigate('/')
 
     // Attach a listener for page unload (closing the tab or browser)
     const handleBeforeUnload = async () => {
@@ -72,15 +290,8 @@ const GameScreen = () => {
 
   console.log(roomState, roomState?.players?.player1)
 
-  const IconComponent1 = getIconComponent(
-    roomState?.players?.player1?.icon || 'Cat'
-  )
-  const IconComponent2 = getIconComponent(
-    roomState?.players?.player2?.icon || 'Squirrel'
-  )
-
   return (
-    <div className="min-h-svh bg-slate-900 flex flex-col p-4 sm:p-8">
+    <div className="h-dvh sm:h-auto sm:min-h-full bg-slate-900 flex flex-col p-4 sm:p-8">
       {/* Exit Button */}
       <button
         className="absolute left-4 top-4 text-white/70 hover:text-white flex items-center 
@@ -92,91 +303,44 @@ const GameScreen = () => {
       </button>
 
       {/* Game Header - Responsive layout */}
-      <div className="flex flex-row justify-between items-center gap-4 sm:gap-8 my-6 sm:my-8">
-        {/* Player 1 Stats */}
-        <div className="relative flex items-center justify-between gap-2 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
-          <IconComponent1 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-pink-500/50" />
-
-          <div>
-            <p className="text-white font-bold text-center text-xs sm:text-xl truncate">
-              {roomState?.players?.player1?.name || 'Player 1'}
-            </p>
-            <div className="flex gap-1">
-              {[...Array(roomState?.players?.player1?.health || 3)].map(
-                (_, i) => (
-                  <Heart
-                    key={i}
-                    className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
-                  />
-                )
-              )}
-            </div>
-          </div>
-          {currentPlayer === 'player1' && (
-            <div
-              className="absolute -bottom-3 sm:-bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r 
-      from-pink-500 to-purple-500 px-4 py-1 rounded-full text-white text-xs sm:text-sm font-semibold
-      shadow-[0_0_10px_rgba(219,39,119,0.3)]"
-            >
-              You
-            </div>
-          )}
-        </div>
-        {/* Timer */}
-        <div className="text-2xl sm:text-4xl font-bold text-white">2:30</div>
-
-        {/* Player 2 Stats */}
-        <div className="relative flex items-center justify-between gap-2 sm:gap-4 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
-          <div>
-            <p className="text-white font-bold text-center text-xs sm:text-xl truncate">
-              {roomState?.players?.player2?.name || 'Player 2'}
-            </p>
-            <div className="flex gap-1">
-              {[...Array(roomState?.players?.player2?.health || 3)].map(
-                (_, i) => (
-                  <Heart
-                    key={i}
-                    className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
-                  />
-                )
-              )}
-            </div>
-          </div>
-          <IconComponent2 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-blue-500/50" />
-          {currentPlayer === 'player2' && (
-            <div
-              className="absolute -bottom-3 sm:-bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r 
-      from-blue-500 to-purple-500 px-4 py-1 rounded-full text-white text-xs sm:text-sm font-semibold
-      shadow-[0_0_10px_rgba(219,39,119,0.3)]"
-            >
-              You
-            </div>
-          )}
-        </div>
-      </div>
+      <GameInfo
+        currentPlayer={currentPlayer}
+        player1={roomState?.players?.player1}
+        player2={roomState?.players?.player2}
+      />
 
       {/* Game Board with Emoji Reactions - Responsive layout */}
       <div className="flex-1 flex justify-center items-center gap-4">
         <div
-          className="order-1 sm:order-2 flex-1 flex items-center justify-center 
-      min-w-[280px] w-full max-w-[600px] aspect-square md:max-w-[1000px]"
+          className="order-1 sm:order-2 flex items-center justify-center w-full overflow-hidden  "
+          // Limit the containing box so it never exceeds 70% of the viewport height
+          style={{ maxHeight: '70vh' }}
         >
-          {roomState?.board &&
-          roomState?.players?.player1 &&
-          roomState?.players?.player2 ? (
-            <GameBoard
-              board={roomState.board}
-              player1Position={roomState?.players?.player1?.position}
-              player2Position={roomState?.players?.player2?.position}
-              player1Icon={roomState?.players?.player1?.icon}
-              player2Icon={roomState?.players?.player2?.icon}
-              bombs={roomState.bombs}
-            />
-          ) : roomState?.status === 'waiting' ? (
-            <button onClick={() => navigate('/waiting')}>Go back</button>
-          ) : (
-            <p className="text-white">Loading board...</p>
-          )}
+          {/* Inner wrapper that maintains a perfect square. */}
+          <div
+            style={{
+              width: 'min(70vh, 100%)',
+              height: 'min(70vh, 100%)',
+              aspectRatio: '1 / 1',
+            }}
+          >
+            {roomState?.board &&
+            roomState?.players?.player1 &&
+            roomState?.players?.player2 ? (
+              <GameBoard
+                board={roomState.board}
+                player1={roomState?.players?.player1}
+                player2={roomState?.players?.player2}
+                bombs={roomState.bombs}
+              />
+            ) : roomState === null ? (
+              <button onClick={() => navigate('/')} className="text-gray-100">
+                Restart game
+              </button>
+            ) : (
+              <p className="text-white">Loading board...</p>
+            )}
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,3 @@
-import React from 'react'
-
 const PlayerHelmet = ({ player }: { player: string }) => {
   const helmentColor = player === '1' ? '#8b3e6c' : '#32589b'
   const circleColor = player === '1' ? '#ff66c4' : '#5271ff'

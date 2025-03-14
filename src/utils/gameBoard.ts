@@ -64,44 +64,27 @@ export const generateBoard = (rows = 11, cols = 11): GameBoard => {
   board[player1Pos.row][player1Pos.col].type = 'empty'
   board[player2Pos.row][player2Pos.col].type = 'empty'
 
-  // Step 4: Ensure adjacent cells for each corner are empty.
-  // We adjust based on each specific corner.
+  // Define a helper to clear a cell (set to 'empty') if it's not a border.
   const clearCell = (r: number, c: number) => {
-    // Only clear if it's within the board bounds and not a border wall.
     if (r > 0 && r < rows - 1 && c > 0 && c < cols - 1) {
       board[r][c].type = 'empty'
     }
   }
 
+  // Step 4: Clear all adjacent cells (top, bottom, left, right) for each starting position.
   // For player1:
-  if (player1CornerKey === 'topLeft') {
-    clearCell(player1Pos.row, player1Pos.col + 1)
-    clearCell(player1Pos.row + 1, player1Pos.col)
-  } else if (player1CornerKey === 'topRight') {
-    clearCell(player1Pos.row, player1Pos.col - 1)
-    clearCell(player1Pos.row + 1, player1Pos.col)
-  } else if (player1CornerKey === 'bottomLeft') {
-    clearCell(player1Pos.row, player1Pos.col + 1)
-    clearCell(player1Pos.row - 1, player1Pos.col)
-  } else if (player1CornerKey === 'bottomRight') {
-    clearCell(player1Pos.row, player1Pos.col - 1)
-    clearCell(player1Pos.row - 1, player1Pos.col)
-  }
+  if (player1Pos.row > 0) clearCell(player1Pos.row - 1, player1Pos.col) // top
+  if (player1Pos.row < rows - 1) clearCell(player1Pos.row + 1, player1Pos.col) // bottom
+  if (player1Pos.col > 0) clearCell(player1Pos.row, player1Pos.col - 1) // left
+  if (player1Pos.col < cols - 1) clearCell(player1Pos.row, player1Pos.col + 1) // right
 
   // For player2:
-  if (player2CornerKey === 'topLeft') {
-    clearCell(player2Pos.row, player2Pos.col + 1)
-    clearCell(player2Pos.row + 1, player2Pos.col)
-  } else if (player2CornerKey === 'topRight') {
-    clearCell(player2Pos.row, player2Pos.col - 1)
-    clearCell(player2Pos.row + 1, player2Pos.col)
-  } else if (player2CornerKey === 'bottomLeft') {
-    clearCell(player2Pos.row, player2Pos.col + 1)
-    clearCell(player2Pos.row - 1, player2Pos.col)
-  } else if (player2CornerKey === 'bottomRight') {
-    clearCell(player2Pos.row, player2Pos.col - 1)
-    clearCell(player2Pos.row - 1, player2Pos.col)
-  }
+  if (player2Pos.row > 0) clearCell(player2Pos.row - 1, player2Pos.col) // top
+  if (player2Pos.row < rows - 1) clearCell(player2Pos.row + 1, player2Pos.col) // bottom
+  if (player2Pos.col > 0) clearCell(player2Pos.row, player2Pos.col - 1) // left
+  if (player2Pos.col < cols - 1) clearCell(player2Pos.row, player2Pos.col + 1) // right
+
+  // Optionally, you can add additional logic to clear diagonal neighbors if needed.
 
   return {
     board,
