@@ -13,10 +13,13 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
 
   // Ref to hold the latest room state for event handlers.
   const roomStateRef = useRef<Room | null>(null)
+  const gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Subscribe to room state updates.
   useEffect(() => {
-    if (!roomId) return
+    if (!roomId) {
+      navigate('/')
+    }
     const roomRef = ref(database, `gameRooms/${roomId}`)
     const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val()
@@ -232,11 +235,15 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   const cleanupPlayer = async () => {
     if (!roomId) return
     const roomRef = ref(database, `gameRooms/${roomId}`)
-    await update(roomRef, {
-      status: 'waiting',
-      [`players/${currentPlayer}`]: null,
-      waitingStartedAt: Date.now(),
-    })
+    if (gameOver) {
+      await remove(roomRef)
+    } else {
+      await update(roomRef, {
+        status: 'waiting',
+        [`players/${currentPlayer}`]: null,
+        waitingStartedAt: Date.now(),
+      })
+    }
   }
 
   // Handle sending an emoji.
@@ -255,12 +262,39 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
 
   // Cleanup on page unload.
   useEffect(() => {
-    const handleBeforeUnload = async () => {
-      await cleanupPlayer()
+    const handleCleanup = () => {
+      cleanupPlayer()
     }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [roomId])
+
+    window.addEventListener('beforeunload', handleCleanup)
+    window.addEventListener('pagehide', handleCleanup) // For Safari and some mobile browsers
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        handleCleanup()
+      }
+    })
+
+    return () => {
+      window.removeEventListener('beforeunload', handleCleanup)
+      window.removeEventListener('pagehide', handleCleanup)
+      document.removeEventListener('visibilitychange', handleCleanup)
+    }
+  }, [currentPlayer, roomState])
+
+  // Set timeout to auto-exit after game over.
+  useEffect(() => {
+    if (gameOver) {
+      gameOverTimeoutRef.current = setTimeout(() => {
+        handleExit()
+      }, 10000)
+    }
+
+    return () => {
+      if (gameOverTimeoutRef.current) {
+        clearTimeout(gameOverTimeoutRef.current)
+      }
+    }
+  }, [gameOver])
 
   // Explicit exit handler.
   const handleExit = async () => {

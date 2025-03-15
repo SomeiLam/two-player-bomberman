@@ -4,15 +4,20 @@ import { ref, onValue, remove, update } from 'firebase/database'
 import { database } from '../firebase'
 import { generateBoard } from '../utils/gameBoard'
 import { Room, PlayerType } from '../type'
+import { useNavigate } from 'react-router-dom'
 
-export const useWaitingRoom = (roomId: string) => {
+export const useWaitingRoom = (roomId: string, currentPlayer: PlayerType) => {
   const [roomState, setRoomState] = useState<Room | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(180)
+  const navigate = useNavigate()
   // Subscribe to room state updates from Firebase.
   useEffect(() => {
     const roomRef = ref(database, `gameRooms/${roomId}`)
     const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val()
+      if (!data.players) {
+        navigate('/')
+      }
       setRoomState(data)
     })
 
@@ -43,8 +48,10 @@ export const useWaitingRoom = (roomId: string) => {
   /**
    * Cleanup function to remove the current player or the entire room.
    */
-  const cleanupPlayer = async (currentPlayer: PlayerType) => {
-    const players = roomState?.players ?? {}
+  const cleanupPlayer = async () => {
+    if (!roomState) return
+
+    const players = roomState.players ?? {}
     if (Object.keys(players).length === 2) {
       await remove(
         ref(database, `gameRooms/${roomId}/players/${currentPlayer}`)
@@ -53,6 +60,26 @@ export const useWaitingRoom = (roomId: string) => {
       await remove(ref(database, `gameRooms/${roomId}`))
     }
   }
+
+  useEffect(() => {
+    const handleCleanup = () => {
+      cleanupPlayer()
+    }
+
+    window.addEventListener('beforeunload', handleCleanup)
+    window.addEventListener('pagehide', handleCleanup) // For Safari and some mobile browsers
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        handleCleanup()
+      }
+    })
+
+    return () => {
+      window.removeEventListener('beforeunload', handleCleanup)
+      window.removeEventListener('pagehide', handleCleanup)
+      document.removeEventListener('visibilitychange', handleCleanup)
+    }
+  }, [currentPlayer, roomState])
 
   /**
    * Start the game by updating player positions, board, bombs, and status.
@@ -81,8 +108,9 @@ export const useWaitingRoom = (roomId: string) => {
    * Resets the waiting timer by updating waitingStartedAt to the current time.
    */
   const extendTimer = async () => {
-    const roomRef = ref(database, `gameRooms/${roomId}`)
-    await update(roomRef, { waitingStartedAt: Date.now() })
+    await update(ref(database, `gameRooms/${roomId}`), {
+      waitingStartedAt: Date.now(),
+    })
   }
 
   return { roomState, cleanupPlayer, startGame, timeLeft, extendTimer }

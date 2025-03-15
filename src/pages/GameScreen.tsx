@@ -28,7 +28,7 @@ const GameScreen = () => {
   useBombExplosions(roomId, !gameOver)
 
   return (
-    <div className="h-dvh sm:h-auto sm:min-h-full bg-slate-900 flex flex-col p-4 sm:p-8">
+    <div className="sm:h-dvh h-auto sm:min-h-full bg-slate-900 flex flex-col p-4 sm:p-8">
       {/* Exit Button */}
       <button
         className="absolute left-4 top-4 text-white/70 hover:text-white flex items-center 

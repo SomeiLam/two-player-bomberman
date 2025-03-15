@@ -10,9 +10,9 @@ import { cleanupPlayerWithGrace } from '../utils/gameRoom'
 
 const WaitingRoom = () => {
   const roomId = 'room_1'
-  const { roomState, cleanupPlayer, startGame, timeLeft, extendTimer } =
-    useWaitingRoom(roomId)
   const { currentPlayer, playerName } = usePlayer()
+  const { roomState, cleanupPlayer, startGame, timeLeft, extendTimer } =
+    useWaitingRoom(roomId, currentPlayer)
   const navigate = useNavigate()
   const [explosionActive, setExplosionActive] = useState(false)
   const [exiting, setExiting] = useState(false)

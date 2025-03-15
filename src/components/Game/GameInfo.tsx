@@ -2,6 +2,7 @@ import { Heart } from 'lucide-react'
 import React from 'react'
 import { getIconComponent } from '../getIconComponent'
 import { UserIcon } from '../../type'
+import classNames from 'classnames'
 
 interface Player {
   name: string
@@ -30,7 +31,14 @@ const GameInfo: React.FC<GameInfoProps> = ({
   return (
     <div className="flex flex-row justify-between items-center gap-4 sm:gap-8 my-6 sm:mt-4 sm:mb-0">
       {/* Player 1 Stats */}
-      <div className="relative flex items-center justify-between gap-2 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
+      <div
+        className={classNames(
+          'relative flex items-center justify-between gap-2 bg-white/10 rounded-xl p-2 sm:p-4',
+          {
+            'border border-purple-500 sm:border-0': currentPlayer === 'player1',
+          }
+        )}
+      >
         <IconComponent1 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-pink-500/50" />
 
         <div>
@@ -53,7 +61,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
         </div>
         {currentPlayer === 'player1' && (
           <div
-            className="absolute -bottom-3 sm:-bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r 
+            className="hidden sm:block absolute -bottom-4 sm:-bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r 
   from-pink-500 to-purple-500 px-4 py-1 rounded-full text-white text-xs sm:text-sm font-semibold
   shadow-[0_0_10px_rgba(219,39,119,0.3)]"
           >
@@ -69,7 +77,14 @@ const GameInfo: React.FC<GameInfoProps> = ({
       )}
 
       {/* Player 2 Stats */}
-      <div className="relative flex items-center justify-between gap-2 sm:gap-4 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
+      <div
+        className={classNames(
+          'relative flex items-center justify-between gap-2 bg-white/10 rounded-xl p-2 sm:p-4',
+          {
+            'border border-purple-500 sm:border-0': currentPlayer === 'player2',
+          }
+        )}
+      >
         <div>
           <p className="text-white font-bold text-center text-xs sm:text-xl truncate">
             {player2?.name || 'Player 2'}
@@ -91,7 +106,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
         <IconComponent2 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-blue-500/50" />
         {currentPlayer === 'player2' && (
           <div
-            className="absolute -bottom-3 sm:-bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r 
+            className="hidden sm:block absolute -bottom-3 sm:-bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r 
   from-blue-500 to-purple-500 px-4 py-1 rounded-full text-white text-xs sm:text-sm font-semibold
   shadow-[0_0_10px_rgba(219,39,119,0.3)]"
           >

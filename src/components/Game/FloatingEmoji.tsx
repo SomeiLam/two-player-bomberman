@@ -8,7 +8,7 @@ const FloatingEmoji = ({
   const emojis = ['😄', '😮', '😱', '🤪', '😎', '🤯', '❤️']
 
   return (
-    <div className="fixed inset-0 pointer-events-none">
+    <div className="fixed inset-0 pointer-events-none z-30">
       {player1Emoji !== undefined && (
         <>
           {[...Array(3)].map((_, i) => (
