@@ -24,6 +24,7 @@ export interface JoinRoomResult {
   currentPlayer: 'player1' | 'player2'
   playerName: string
   icon: UserIcon
+  roomId: string
 }
 
 /**
@@ -31,6 +32,17 @@ export interface JoinRoomResult {
  * @returns An object with a joinRoom function.
  */
 export const useCreateRoom = () => {
+  const checkRoomStatus = async (roomId: string): Promise<boolean> => {
+    const roomRef = ref(database, `gameRooms/${roomId}`)
+    const snapshot = await get(roomRef)
+    if (snapshot.exists()) {
+      const data: Room = snapshot.val()
+      const players = data.players || {}
+      return !!(players.player1 && players.player2)
+    }
+    return false
+  }
+
   const initialPlayer = {
     health: 3,
     position: {
@@ -66,6 +78,7 @@ export const useCreateRoom = () => {
           currentPlayer: 'player2',
           playerName: finalName,
           icon: 'Squirrel',
+          roomId,
         }
       } else {
         const finalName =
@@ -80,7 +93,12 @@ export const useCreateRoom = () => {
           status: 'waiting',
           waitingStartedAt: Date.now(),
         })
-        return { currentPlayer: 'player1', playerName: finalName, icon: 'Cat' }
+        return {
+          currentPlayer: 'player1',
+          playerName: finalName,
+          icon: 'Cat',
+          roomId,
+        }
       }
     } else {
       const finalName =
@@ -96,9 +114,14 @@ export const useCreateRoom = () => {
           },
         },
       })
-      return { currentPlayer: 'player1', playerName: finalName, icon: 'Cat' }
+      return {
+        currentPlayer: 'player1',
+        playerName: finalName,
+        icon: 'Cat',
+        roomId,
+      }
     }
   }
 
-  return { joinRoom }
+  return { joinRoom, checkRoomStatus }
 }
