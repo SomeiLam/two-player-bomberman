@@ -1,82 +1,35 @@
 import { useRef } from 'react'
 import { Gamepad2, Bomb, Sparkle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { get, ref, set } from 'firebase/database'
-import { database } from '../firebase'
 import { usePlayer } from '../context/PlayerContext'
-
-const roomId = 'roomId_123'
-
-const initialPlayer = {
-  health: 3,
-  position: {
-    x: 0,
-    y: 0,
-  },
-  emoji: null,
-  direction: 'down',
-}
+import { useCreateRoom } from '../hooks/useCreateRoom'
 
 const HomeScreen = () => {
   const nameInputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const { setPlayerName, setCurrentPlayer, setIcon, setRoomId } = usePlayer()
+  const { joinRoom } = useCreateRoom()
 
   const handleStart = async () => {
-    let playerName = nameInputRef.current?.value.trim()
-
-    const roomRef = ref(database, `gameRooms/${roomId}`)
-    const snapshot = await get(roomRef)
+    const playerName = nameInputRef.current?.value.trim() || ''
+    // Assume roomId is determined (could be from state, props, or generated)
+    const roomId = 'room_1' // Replace with your room id logic
     setRoomId(roomId)
 
-    if (snapshot.exists()) {
-      // The room exists; check if player1 is already set
-      const data = snapshot.val()
-      if (data?.players?.player1) {
-        if (!playerName) {
-          playerName = 'Jujube'
-        }
-        // Player1 exists, so add player2
-        await set(ref(database, `gameRooms/${roomId}/players/player2`), {
-          name: playerName && playerName?.length > 0 ? playerName : 'Jujube',
-          icon: 'Squirrel',
-          ...initialPlayer,
-        })
-        setCurrentPlayer('player2')
-        setIcon('Squirrel')
-      } else {
-        if (!playerName) {
-          playerName = 'Bubettino'
-        }
-        // No player1 exists; add the new player as player1
-        await set(ref(database, `gameRooms/${roomId}/players/player1`), {
-          name: playerName && playerName?.length > 0 ? playerName : 'Bubettino',
-          icon: 'Cat',
-          ...initialPlayer,
-        })
-        setCurrentPlayer('player1')
-      }
-    } else {
-      if (!playerName) {
-        playerName = 'Jujube'
-      }
-      // The room doesn't exist; create a new room with the player as player1
-      await set(roomRef, {
-        status: 'waiting',
-        players: {
-          player1: {
-            name: playerName,
-            icon: 'Cat',
-            ...initialPlayer,
-          },
-        },
-      })
-      setCurrentPlayer('player1')
+    try {
+      const {
+        currentPlayer,
+        playerName: finalName,
+        icon,
+      } = await joinRoom(roomId, playerName)
+      setCurrentPlayer(currentPlayer)
+      setPlayerName(finalName)
+      setIcon(icon)
+      navigate('/waiting')
+    } catch (error) {
+      console.error('Error joining room:', error)
+      // Optionally show error feedback to the user
     }
-    setPlayerName(playerName)
-
-    // Navigate to the waiting room
-    navigate('/waiting')
   }
 
   return (

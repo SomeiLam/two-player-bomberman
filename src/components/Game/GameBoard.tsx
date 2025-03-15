@@ -1,8 +1,7 @@
 import { BrickWall } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
-import { Cell } from '../../utils/gameBoard'
 import PlayerHelmet from '../../assets/PlayerHelmet'
-import { UserIcon } from '../../type'
+import { Cell, UserIcon } from '../../type'
 import { getIconComponent } from '../getIconComponent'
 import player1Bomb from '../../assets/player1-bomb.svg'
 import player2Bomb from '../../assets/player2-bomb.svg'
@@ -18,7 +17,7 @@ type Direction = 'up' | 'down' | 'left' | 'right'
 
 interface Player {
   position: Position
-  icon: UserIcon
+  icon?: UserIcon
   direction: Direction
 }
 
@@ -40,7 +39,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
   player2,
   bombs = [],
 }) => {
-  const rows = board.length
   const cols = board[0]?.length || 0
 
   // This state updates periodically to force a re-render
@@ -121,7 +119,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                     >
                       <HelmetWithIcon
                         player="1"
-                        icon={player1.icon}
+                        icon={player1.icon || 'Cat'}
                         direction={player1.direction}
                       />
                     </div>
@@ -137,7 +135,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                     >
                       <HelmetWithIcon
                         player="2"
-                        icon={player2.icon}
+                        icon={player2.icon || 'Squirrel'}
                         direction={player2.direction}
                       />
                     </div>
@@ -156,7 +154,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   >
                     <HelmetWithIcon
                       player="1"
-                      icon={player1.icon}
+                      icon={player1.icon || 'Cat'}
                       direction={player1.direction}
                     />
                   </div>
@@ -174,7 +172,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   >
                     <HelmetWithIcon
                       player="2"
-                      icon={player2.icon}
+                      icon={player2.icon || 'Squirrel'}
                       direction={player2.direction}
                     />
                   </div>

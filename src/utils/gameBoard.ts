@@ -1,17 +1,4 @@
-export interface Cell {
-  type: 'wall' | 'obstacle' | 'empty'
-}
-
-export interface Position {
-  row: number
-  col: number
-}
-
-export interface GameBoard {
-  board: Cell[][]
-  player1Position: Position
-  player2Position: Position
-}
+import { Cell, GameBoard, Position } from '../type'
 
 export const generateBoard = (rows = 11, cols = 11): GameBoard => {
   // Step 1: Generate the board with borders, static walls, and random obstacles.

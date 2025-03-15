@@ -13,7 +13,7 @@ const FloatingEmoji = ({
         <>
           {[...Array(3)].map((_, i) => (
             <div
-              key={`p1-${player1Emoji.timestamp}`}
+              key={`p1-${player1Emoji.timestamp}-${i}`}
               className="absolute animate-float-emoji"
               style={{
                 left: `${Math.random() * 10}%`,
@@ -32,7 +32,7 @@ const FloatingEmoji = ({
         <>
           {[...Array(3)].map((_, i) => (
             <div
-              key={`p2-${player2Emoji.timestamp}`}
+              key={`p2-${player2Emoji.timestamp}-${i}`}
               className="absolute animate-float-emoji"
               style={{
                 right: `${Math.random() * 10}%`,

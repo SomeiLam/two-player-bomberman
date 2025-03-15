@@ -1,60 +1,48 @@
 import { useEffect, useState } from 'react'
 import { Loader, ArrowLeft, BombIcon } from 'lucide-react'
-import { ref, onValue, remove, update } from 'firebase/database'
-import { database } from '../firebase'
 import { useNavigate } from 'react-router-dom'
 import PlayerCard from '../components/WaitingRoom/PlayerCard'
 import { usePlayer } from '../context/PlayerContext'
 import IconPicker from '../components/WaitingRoom/IconPicker'
-import { generateBoard } from '../utils/gameBoard'
 import ExplosionTransition from '../components/WaitingRoom/ExplosionTransition'
+import { useWaitingRoom } from '../hooks/useWaitingRoom'
+import { cleanupPlayerWithGrace } from '../utils/gameRoom'
 
 const WaitingRoom = () => {
-  const [roomState, setRoomState] = useState<any>(null)
-  const [explosionActive, setExplosionActive] = useState(false)
-  const roomId = 'roomId_123'
+  const roomId = 'room_1'
+  const { roomState, cleanupPlayer, startGame, timeLeft, extendTimer } =
+    useWaitingRoom(roomId)
   const { currentPlayer, playerName } = usePlayer()
   const navigate = useNavigate()
+  const [explosionActive, setExplosionActive] = useState(false)
+  const [exiting, setExiting] = useState(false)
+
+  // Format time (mm:ss)
+  const formatTime = (seconds: number) => {
+    const secs = Math.floor(seconds)
+    const minutes = Math.floor(secs / 60)
+    const remainder = secs % 60
+    return `${minutes}:${remainder < 10 ? '0' : ''}${remainder}`
+  }
+
+  // When timer reaches 0, show 0 for one tick then display "Exiting..." for 3 seconds
+  useEffect(() => {
+    if (timeLeft === 0 && !exiting) {
+      // Trigger the exiting state after showing 0 for one tick.
+      setExiting(true)
+      setTimeout(() => {
+        navigate('/')
+      }, 1000)
+    }
+  }, [timeLeft, exiting, navigate])
 
   const handleExit = async () => {
-    await cleanupPlayer()
+    await cleanupPlayerWithGrace(roomId, currentPlayer)
     navigate('/')
   }
 
   const handleStartGame = async () => {
-    const boardData = generateBoard() // Create a new 11x11 board
-    if (roomId) {
-      const roomRef = ref(database, `gameRooms/${roomId}`)
-      await update(roomRef, {
-        'players/player1/position': {
-          x: boardData.player1Position.col,
-          y: boardData.player1Position.row,
-        },
-        'players/player2/position': {
-          x: boardData.player2Position.col,
-          y: boardData.player2Position.row,
-        },
-      })
-      await update(roomRef, {
-        board: boardData.board,
-        bombs: [],
-        status: 'in-progress',
-      })
-    }
-  }
-
-  // Function to remove the current player's data from Firebase.
-  const cleanupPlayer = async () => {
-    console.log(roomState.players)
-    if (Object.keys(roomState.players).length === 2) {
-      await remove(
-        ref(database, `gameRooms/${roomId}/players/${currentPlayer}`)
-      )
-    } else if (Object.keys(roomState.players).length === 1) {
-      await remove(ref(database, `gameRooms/${roomId}}`))
-    }
-
-    //  remove the entire room if no players remain.
+    await startGame()
   }
 
   useEffect(() => {
@@ -67,25 +55,16 @@ const WaitingRoom = () => {
   }, [navigate, roomState?.status, explosionActive])
 
   useEffect(() => {
-    const roomRef = ref(database, `gameRooms/${roomId}`)
-    const unsubscribe = onValue(roomRef, (snapshot) => {
-      const data = snapshot.val()
-      setRoomState(data)
-    })
-
     if (!playerName) navigate('/')
-    // Attach a listener for page unload (closing the tab or browser)
+    // Cleanup on page unload (closing tab or browser)
     const handleBeforeUnload = async () => {
-      await cleanupPlayer()
+      await cleanupPlayerWithGrace(roomId, currentPlayer)
     }
-
     window.addEventListener('beforeunload', handleBeforeUnload)
-    // Cleanup subscription on unmount
     return () => {
-      unsubscribe()
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [])
+  }, [playerName, currentPlayer, navigate, cleanupPlayer])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-8">
@@ -107,9 +86,14 @@ const WaitingRoom = () => {
           Exit
         </button>
 
-        <h2 className="text-3xl sm:text-4xl font-bold text-center text-white mb-12">
+        <h2 className="text-3xl sm:text-4xl font-bold text-center text-white mb-2">
           Waiting Room
         </h2>
+
+        {/* Display countdown timer */}
+        <div className="text-2xl sm:text-4xl font-bold text-center text-white mb-8">
+          {formatTime(timeLeft)}
+        </div>
 
         {roomState ? (
           <div className="flex justify-around items-center gap-1">
@@ -121,11 +105,7 @@ const WaitingRoom = () => {
                   : 'Player 1'
               }
               status={roomState?.players?.player1 ? 'ready' : 'waiting'}
-              icon={
-                roomState?.players?.player1
-                  ? roomState?.players?.player1?.icon
-                  : 'Cat'
-              }
+              icon={roomState?.players?.player1?.icon ?? 'Cat'}
               youBadge={currentPlayer === 'player1' ? true : false}
             />
 
@@ -153,11 +133,7 @@ const WaitingRoom = () => {
                   : 'Player 2'
               }
               status={roomState?.players?.player2 ? 'ready' : 'waiting'}
-              icon={
-                roomState?.players?.player2
-                  ? roomState?.players?.player2?.icon
-                  : 'Squirrel'
-              }
+              icon={roomState?.players?.player2?.icon ?? 'Squirrel'}
               youBadge={currentPlayer === 'player2' ? true : false}
             />
           </div>
@@ -165,12 +141,14 @@ const WaitingRoom = () => {
           <div className="flex justify-around items-center gap-8">
             <div className="flex flex-col items-center gap-4">
               <Loader className="w-12 h-12 text-purple-400 animate-spin" />
-              <p className="text-purple-300 text-lg">Loading room data...</p>
+              <p className="text-purple-300 text-lg">
+                {exiting ? 'Going back...' : 'Loading room data...'}
+              </p>
             </div>
           </div>
         )}
         <div className="mt-5">
-          <IconPicker />
+          <IconPicker extendTimer={extendTimer} />
         </div>
         <div className="flex justify-center w-full">
           {roomState?.status === 'waiting' &&

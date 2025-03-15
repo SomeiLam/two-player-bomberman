@@ -5,7 +5,7 @@ import { UserIcon } from '../../type'
 
 interface Player {
   name: string
-  icon: UserIcon
+  icon?: UserIcon
   health: number
 }
 
@@ -13,12 +13,14 @@ interface GameInfoProps {
   currentPlayer: string
   player1: Player
   player2: Player
+  timeLeft?: number
 }
 
 const GameInfo: React.FC<GameInfoProps> = ({
   currentPlayer,
   player1,
   player2,
+  timeLeft = 180,
 }) => {
   const IconComponent1 = getIconComponent(player1?.icon || 'Cat')
   const IconComponent2 = getIconComponent(player2?.icon || 'Squirrel')
@@ -34,12 +36,17 @@ const GameInfo: React.FC<GameInfoProps> = ({
             {player1?.name || 'Player 1'}
           </p>
           <div className="flex gap-1">
-            {[...Array(player1?.health || 3)].map((_, i) => (
-              <Heart
-                key={i}
-                className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
-              />
-            ))}
+            {player1?.health > 0 &&
+              [...Array(player1?.health)]?.map((_, i) => (
+                <Heart
+                  key={i}
+                  className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
+                />
+              ))}
+            {player1?.health < 3 &&
+              [...Array(3 - player1?.health)]?.map((_, i) => (
+                <Heart key={i} className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+              ))}
           </div>
         </div>
         {currentPlayer === 'player1' && (
@@ -53,7 +60,9 @@ const GameInfo: React.FC<GameInfoProps> = ({
         )}
       </div>
       {/* Timer */}
-      <div className="text-2xl sm:text-4xl font-bold text-white">2:30</div>
+      <div className="text-2xl sm:text-4xl font-bold text-white">
+        {timeLeft} second{timeLeft !== 1 && 's'}
+      </div>
 
       {/* Player 2 Stats */}
       <div className="relative flex items-center justify-between gap-2 sm:gap-4 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
@@ -62,12 +71,17 @@ const GameInfo: React.FC<GameInfoProps> = ({
             {player2?.name || 'Player 2'}
           </p>
           <div className="flex gap-1">
-            {[...Array(player2?.health || 3)].map((_, i) => (
-              <Heart
-                key={i}
-                className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
-              />
-            ))}
+            {player2?.health > 0 &&
+              [...Array(player2?.health)]?.map((_, i) => (
+                <Heart
+                  key={i}
+                  className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-500"
+                />
+              ))}
+            {player2?.health < 3 &&
+              [...Array(3 - player2?.health)]?.map((_, i) => (
+                <Heart key={i} className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+              ))}
           </div>
         </div>
         <IconComponent2 className="w-10 h-10 p-2 sm:w-12 sm:h-12 rounded-full bg-blue-500/50" />

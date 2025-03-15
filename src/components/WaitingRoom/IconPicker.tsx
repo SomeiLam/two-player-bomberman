@@ -18,13 +18,14 @@ const playerIcons: UserIcon[] = [
   'Rat',
 ]
 
-const IconPicker = () => {
+const IconPicker = ({ extendTimer }: { extendTimer: () => void }) => {
   const { icon, setIcon, currentPlayer, roomId } = usePlayer()
 
   // This function is called when a user clicks on an icon.
   // It updates the local context and then updates Firebase so that the other user can see the new icon.
   const handleIconClick = (selectedIcon: UserIcon) => {
     setIcon(selectedIcon)
+    extendTimer()
 
     // Update the icon for the current player in Firebase
     // Here, we assume that player info is stored under:
@@ -35,12 +36,6 @@ const IconPicker = () => {
         `gameRooms/${roomId}/players/${currentPlayer}`
       )
       update(playerRef, { icon: selectedIcon })
-        .then(() => {
-          console.log('Icon updated in Firebase')
-        })
-        .catch((error) => {
-          console.error('Error updating icon:', error)
-        })
     }
   }
 
