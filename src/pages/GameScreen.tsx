@@ -7,7 +7,6 @@ import GameBoard from '../components/Game/GameBoard'
 import GameInfo from '../components/Game/GameInfo'
 import { useGame } from '../hooks/useGame'
 import useBombExplosions from '../hooks/useBombExplosions'
-
 // Emoji reactions
 const emojis = ['😄', '😮', '😱', '🤪', '😎', '🤯', '❤️']
 const THRESHOLD = 100 * 1000
@@ -15,12 +14,12 @@ const THRESHOLD = 100 * 1000
 const GameScreen = () => {
   const { currentPlayer, roomId } = usePlayer()
   const navigate = useNavigate()
-  const { roomState, handleExit, handleSendEmoji } = useGame(
+  const { roomState, handleExit, handleSendEmoji, gameOver } = useGame(
     roomId,
     currentPlayer
   )
 
-  useBombExplosions(roomId)
+  useBombExplosions(roomId, !gameOver)
 
   return (
     <div className="h-dvh sm:h-auto sm:min-h-full bg-slate-900 flex flex-col p-4 sm:p-8">
@@ -50,11 +49,11 @@ const GameScreen = () => {
           // Limit the containing box so it never exceeds 70% of the viewport height
           style={{ maxHeight: '70vh' }}
         >
-          {/* Inner wrapper that maintains a perfect square. */}
           <div
             style={{
               width: 'min(70vh, 100%)',
               height: 'min(70vh, 100%)',
+              position: 'relative',
               aspectRatio: '1 / 1',
             }}
           >
@@ -63,8 +62,8 @@ const GameScreen = () => {
             roomState?.players?.player2 ? (
               <GameBoard
                 board={roomState.board}
-                player1={roomState?.players?.player1}
-                player2={roomState?.players?.player2}
+                player1={roomState.players.player1}
+                player2={roomState.players.player2}
                 bombs={roomState.bombs}
               />
             ) : roomState === null ? (
@@ -73,6 +72,12 @@ const GameScreen = () => {
               </button>
             ) : (
               <p className="text-white">Loading board...</p>
+            )}
+
+            {gameOver && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                <h1 className="text-white text-6xl font-bold">GAME OVER</h1>
+              </div>
             )}
           </div>
         </div>

@@ -88,6 +88,14 @@ const applyBombExplosions = (room: Room): Room => {
     })
 
   room.bombs = bombsArray
+  // End the game if any player's health is zero or below.
+  if (
+    (room.players.player1 && room.players.player1.health <= 0) ||
+    (room.players.player2 && room.players.player2.health <= 0)
+  ) {
+    room.status = 'ended'
+  }
+
   return room
 }
 

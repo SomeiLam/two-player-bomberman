@@ -1,12 +1,13 @@
 // src/hooks/useGame.ts
 import { useState, useEffect, useRef } from 'react'
-import { ref, onValue, update, runTransaction } from 'firebase/database'
+import { ref, onValue, update, runTransaction, remove } from 'firebase/database'
 import { database } from '../firebase'
 import { Room, PlayerType } from '../type'
 import { useNavigate } from 'react-router-dom'
 
 export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   const [roomState, setRoomState] = useState<Room | null>(null)
+  const [gameOver, setGameOver] = useState<boolean>(false)
   const navigate = useNavigate()
 
   // Create a ref to store the latest roomState for use in event handlers.
@@ -19,8 +20,13 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val()
       setRoomState(data)
-      // Update the ref with the latest data.
       roomStateRef.current = data
+
+      // If room status becomes 'ended', mark gameOver.
+      if (data && data.status === 'ended') {
+        setGameOver(true)
+      }
+
       // If room status reverts to 'waiting', navigate back.
       if (data && data.status === 'waiting') {
         navigate('/waiting')
@@ -28,6 +34,17 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     })
     return () => unsubscribe()
   }, [roomId, navigate])
+
+  useEffect(() => {
+    // Only auto-navigate if roomState is loaded.
+    if (roomState !== null && roomState.players) {
+      const playersCount = Object.keys(roomState.players).length
+      if (playersCount < 2) {
+        // Optionally, add a delay here if desired.
+        navigate('/')
+      }
+    }
+  }, [roomState, navigate])
 
   // Handle player movement and bomb planting via keydown events.
   useEffect(() => {
@@ -38,6 +55,9 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.keyCode === 32) {
         e.preventDefault()
       }
+
+      // Do not process movement if the game is over.
+      if (gameOver) return
 
       // Bomb planting when space bar is pressed.
       if (e.keyCode === 32) {
@@ -99,10 +119,9 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       })
     }
 
-    // Attach the event listener once.
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [roomId, currentPlayer]) // roomState is not a dependency here
+  }, [roomId, currentPlayer, gameOver])
 
   // Bomb planting logic using a transaction.
   const handlePlantBomb = () => {
@@ -173,7 +192,10 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
 
   // Explicit exit handler.
   const handleExit = async () => {
-    if (roomState?.status === 'in-progress') {
+    const roomRef = ref(database, `gameRooms/${roomId}`)
+    if (roomState?.status === 'ended') {
+      await remove(roomRef)
+    } else if (roomState?.status === 'in-progress') {
       await cleanupPlayer()
     }
     navigate('/')
@@ -183,6 +205,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     roomState,
     handleExit,
     handleSendEmoji,
-    handlePlantBomb, // Expose if needed for additional UI triggers.
+    handlePlantBomb,
+    gameOver, // expose gameOver for UI consumption
   }
 }
