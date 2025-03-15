@@ -8,9 +8,10 @@ import { useNavigate } from 'react-router-dom'
 export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   const [roomState, setRoomState] = useState<Room | null>(null)
   const [gameOver, setGameOver] = useState<boolean>(false)
+  const [timeLeft, setTimeLeft] = useState<number>(60)
   const navigate = useNavigate()
 
-  // Create a ref to store the latest roomState for use in event handlers.
+  // Create a ref to store the latest roomState for event handlers.
   const roomStateRef = useRef<Room | null>(null)
 
   // Subscribe to room state updates from Firebase.
@@ -22,11 +23,10 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       setRoomState(data)
       roomStateRef.current = data
 
-      // If room status becomes 'ended', mark gameOver.
+      // If the room's status is "ended", mark gameOver.
       if (data && data.status === 'ended') {
         setGameOver(true)
       }
-
       // If room status reverts to 'waiting', navigate back.
       if (data && data.status === 'waiting') {
         navigate('/waiting')
@@ -35,16 +35,31 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     return () => unsubscribe()
   }, [roomId, navigate])
 
+  // Timer effect: start countdown when the game is in progress.
   useEffect(() => {
-    // Only auto-navigate if roomState is loaded.
-    if (roomState !== null && roomState.players) {
-      const playersCount = Object.keys(roomState.players).length
-      if (playersCount < 2) {
-        // Optionally, add a delay here if desired.
-        navigate('/')
-      }
+    if (roomState && roomState.status === 'in-progress') {
+      // Reset timer at game start.
+      setTimeLeft(60)
+      const roomRef = ref(database, `gameRooms/${roomId}`)
+      const timerInterval = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            // Time expired: update room status to "ended" and mark game as over.
+            update(roomRef, { status: 'ended' })
+            setGameOver(true)
+            clearInterval(timerInterval)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      return () => clearInterval(timerInterval)
     }
-  }, [roomState, navigate])
+
+    if (!roomState && gameOver) {
+      navigate('/')
+    }
+  }, [roomState?.status, roomId])
 
   // Handle player movement and bomb planting via keydown events.
   useEffect(() => {
@@ -59,7 +74,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       // Do not process movement if the game is over.
       if (gameOver) return
 
-      // Bomb planting when space bar is pressed.
+      // Bomb planting on space bar.
       if (e.keyCode === 32) {
         handlePlantBomb()
         return
@@ -100,7 +115,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       const newX = oldX + deltaX
       const newY = oldY + deltaY
 
-      // Optional: Check for boundaries and obstacles on the board.
+      // Optional: Check for boundaries/obstacles.
       if (latestRoomState?.board) {
         const cell = latestRoomState.board[newY]?.[newX]
         if (!cell || cell.type === 'wall' || cell.type === 'obstacle') {
@@ -140,7 +155,6 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     }
 
     const bombsRef = ref(database, `gameRooms/${roomId}/bombs`)
-
     runTransaction(bombsRef, (currentBombs) => {
       const now = Date.now()
       const bombsArray = Array.isArray(currentBombs) ? currentBombs : []
@@ -156,7 +170,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     })
   }
 
-  // Cleanup function to remove the current player's data from the room.
+  // Cleanup function to remove the current player's data.
   const cleanupPlayer = async () => {
     if (!roomId) return
     const roomRef = ref(database, `gameRooms/${roomId}`)
@@ -206,6 +220,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     handleExit,
     handleSendEmoji,
     handlePlantBomb,
-    gameOver, // expose gameOver for UI consumption
+    gameOver,
+    timeLeft,
   }
 }

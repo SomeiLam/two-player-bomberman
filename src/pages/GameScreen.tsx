@@ -14,10 +14,8 @@ const THRESHOLD = 100 * 1000
 const GameScreen = () => {
   const { currentPlayer, roomId } = usePlayer()
   const navigate = useNavigate()
-  const { roomState, handleExit, handleSendEmoji, gameOver } = useGame(
-    roomId,
-    currentPlayer
-  )
+  const { roomState, handleExit, handleSendEmoji, gameOver, timeLeft } =
+    useGame(roomId, currentPlayer)
 
   useBombExplosions(roomId, !gameOver)
 
@@ -39,6 +37,8 @@ const GameScreen = () => {
           currentPlayer={currentPlayer}
           player1={roomState?.players?.player1}
           player2={roomState?.players?.player2}
+          timeLeft={timeLeft}
+          gameOver={gameOver}
         />
       )}
 
@@ -75,7 +75,7 @@ const GameScreen = () => {
             )}
 
             {gameOver && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-20">
                 <h1 className="text-white text-6xl font-bold">GAME OVER</h1>
               </div>
             )}

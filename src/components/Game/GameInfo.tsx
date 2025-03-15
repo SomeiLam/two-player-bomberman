@@ -14,6 +14,7 @@ interface GameInfoProps {
   player1: Player
   player2: Player
   timeLeft?: number
+  gameOver: boolean
 }
 
 const GameInfo: React.FC<GameInfoProps> = ({
@@ -21,6 +22,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   player1,
   player2,
   timeLeft = 180,
+  gameOver,
 }) => {
   const IconComponent1 = getIconComponent(player1?.icon || 'Cat')
   const IconComponent2 = getIconComponent(player2?.icon || 'Squirrel')
@@ -60,9 +62,11 @@ const GameInfo: React.FC<GameInfoProps> = ({
         )}
       </div>
       {/* Timer */}
-      <div className="text-2xl sm:text-4xl font-bold text-white">
-        {timeLeft} second{timeLeft !== 1 && 's'}
-      </div>
+      {!gameOver && (
+        <div className="text-2xl sm:text-4xl font-bold text-white">
+          {timeLeft} second{timeLeft !== 1 && 's'}
+        </div>
+      )}
 
       {/* Player 2 Stats */}
       <div className="relative flex items-center justify-between gap-2 sm:gap-4 bg-white/10 rounded-xl py-4 px-2 sm:p-4">
