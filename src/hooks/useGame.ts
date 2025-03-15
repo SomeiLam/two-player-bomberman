@@ -1,13 +1,6 @@
 // src/hooks/useGame.ts
 import { useState, useEffect, useRef } from 'react'
-import {
-  ref,
-  onValue,
-  update,
-  runTransaction,
-  remove,
-  get,
-} from 'firebase/database'
+import { ref, onValue, update, runTransaction, remove } from 'firebase/database'
 import { database } from '../firebase'
 import { Room, PlayerType } from '../type'
 import { useNavigate } from 'react-router-dom'
@@ -71,17 +64,15 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   // Handle keyboard movement and bomb planting.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!roomId || !currentPlayer) return
+      if (!roomId || !currentPlayer || gameOver) return
 
-      // Prevent default for arrow keys and space.
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.keyCode === 32) {
+      if (
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)
+      ) {
         e.preventDefault()
       }
 
-      if (gameOver) return
-
-      // Bomb planting with space bar.
-      if (e.keyCode === 32) {
+      if (e.key === ' ') {
         handlePlantBomb()
         return
       }
@@ -111,25 +102,31 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
           return
       }
 
-      // Use the ref to access the latest state.
       const latestRoomState = roomStateRef.current
       const playerState = latestRoomState?.players?.[currentPlayer]
       if (!playerState?.position) return
 
-      const oldX = playerState.position.x
-      const oldY = playerState.position.y
-      const newX = oldX + deltaX
-      const newY = oldY + deltaY
+      const newX = playerState.position.x + deltaX
+      const newY = playerState.position.y + deltaY
 
-      // Optional: check for boundaries and obstacles.
+      // Check boundaries, obstacles, and bombs
       if (latestRoomState?.board) {
         const cell = latestRoomState.board[newY]?.[newX]
-        if (!cell || cell.type === 'wall' || cell.type === 'obstacle') {
-          return
+        const hasBomb = latestRoomState.bombs?.some(
+          (bomb) => bomb.x === newX && bomb.y === newY
+        )
+
+        if (
+          !cell ||
+          cell.type === 'wall' ||
+          cell.type === 'obstacle' ||
+          hasBomb
+        ) {
+          return // Can't move into blocked cell
         }
       }
 
-      // Update player's direction and position.
+      // Update player's position in Firebase
       const playerRef = ref(
         database,
         `gameRooms/${roomId}/players/${currentPlayer}`
@@ -173,10 +170,20 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     const newX = playerState.position.x + deltaX
     const newY = playerState.position.y + deltaY
 
+    // Check boundaries, obstacles, and bombs
     if (latestRoomState?.board) {
       const cell = latestRoomState.board[newY]?.[newX]
-      if (!cell || cell.type === 'wall' || cell.type === 'obstacle') {
-        return
+      const hasBomb = latestRoomState.bombs?.some(
+        (bomb) => bomb.x === newX && bomb.y === newY
+      )
+
+      if (
+        !cell ||
+        cell.type === 'wall' ||
+        cell.type === 'obstacle' ||
+        hasBomb
+      ) {
+        return // Can't move into blocked cell
       }
     }
 

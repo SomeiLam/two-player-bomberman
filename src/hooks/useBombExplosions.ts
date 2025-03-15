@@ -28,6 +28,7 @@ const applyBombExplosions = (room: Room): Room => {
       ]
 
       explosionCoordinates.forEach(([x, y]) => {
+        if (!room.board || !room.players) return
         // Check boundaries.
         if (
           y < 0 ||
@@ -112,13 +113,13 @@ const useBombExplosions = (roomId: string, enabled: boolean = true) => {
         const randomDelay = Math.floor(Math.random() * 200)
         await new Promise((resolve) => setTimeout(resolve, randomDelay))
 
-        await runTransaction(roomRef, (currentRoom: any) => {
+        await runTransaction(roomRef, (currentRoom) => {
           if (!currentRoom) return currentRoom
           const updatedRoom = applyBombExplosions(currentRoom)
           return updatedRoom
         })
-      } catch (error: any) {
-        if (error.message && error.message.includes('maxretry')) {
+      } catch (error: unknown) {
+        if (error instanceof Error && error.message.includes('maxretry')) {
           console.error('Bomb explosion transaction maxretry reached:', error)
           // Optionally, you can choose to skip this cycle
         } else {
