@@ -25,6 +25,7 @@ export interface Room {
     plantedAt: number
     plantedBy: PlayerType
     exploded: boolean
+    explosionAt?: number
   }[]
   status?: 'waiting' | 'in-progress' | 'ended'
   waitingStartedAt: number

@@ -14,11 +14,14 @@ const applyBombExplosions = (room: Room): Room => {
   bombsArray.forEach((bomb, index) => {
     const bombAge = now - bomb.plantedAt
 
-    // Process explosion if bomb is in its explosion window and hasn't been processed.
-    if (bombAge >= 3000 && bombAge < 4000 && !bomb.exploded) {
+    // Explode at exactly 3000ms (mark bomb as exploding)
+    if (bombAge >= 3000 && !bomb.exploded) {
       bomb.exploded = true
+      bomb.explosionAt = now
+    }
 
-      // Define explosion area (bomb cell + adjacent cells)
+    // Remove bomb & apply final state changes at 4000ms
+    if (bombAge >= 4000) {
       const explosionCoordinates = [
         [bomb.x, bomb.y],
         [bomb.x, bomb.y - 1],
@@ -28,65 +31,52 @@ const applyBombExplosions = (room: Room): Room => {
       ]
 
       explosionCoordinates.forEach(([x, y]) => {
-        if (!room.board || !room.players) return
-        // Check boundaries.
         if (
           y < 0 ||
-          y >= room.board.length ||
+          y >= room.board!.length ||
           x < 0 ||
-          x >= room.board[0].length
-        ) {
+          x >= room.board![0].length
+        )
           return
-        }
-        const cell = room.board[y][x]
+
+        const cell = room.board![y][x]
+
+        // Destroy obstacle now (at bomb removal time)
         if (cell.type === 'obstacle') {
           cell.type = 'empty'
         }
-        // Damage players.
-        const p1 = room.players.player1
-        const p2 = room.players.player2
-        if (
-          p1 &&
-          p1.position &&
-          p1.position.x === x &&
-          p1.position.y === y &&
-          p1.health > 0
-        ) {
-          p1.health -= 1
-        }
-        if (
-          p2 &&
-          p2.position &&
-          p2.position.x === x &&
-          p2.position.y === y &&
-          p2.health > 0
-        ) {
-          p2.health -= 1
-        }
-      })
-    }
 
-    // Mark bomb for removal if older than 4000ms.
-    if (bombAge >= 4000) {
+        // Damage players now
+        const p1 = room.players!.player1
+        const p2 = room.players!.player2
+
+        if (p1?.position.x === x && p1?.position.y === y && p1.health > 0)
+          p1.health -= 1
+
+        if (p2?.position.x === x && p2?.position.y === y && p2.health > 0)
+          p2.health -= 1
+      })
+
+      // Schedule bomb removal
       bombsToRemove.push(index)
     }
   })
 
-  // Remove expired bombs.
+  // Remove expired bombs
   bombsToRemove
     .sort((a, b) => b - a)
-    .forEach((idx) => {
-      bombsArray.splice(idx, 1)
-    })
+    .forEach((idx) => bombsArray.splice(idx, 1))
 
   room.bombs = bombsArray
-  // End the game if any player's health is zero or below.
+
+  // End game if health is depleted
   if (
     (room.players.player1 && room.players.player1.health <= 0) ||
     (room.players.player2 && room.players.player2.health <= 0)
   ) {
     room.status = 'ended'
   }
+
   return room
 }
 
@@ -97,36 +87,18 @@ const useBombExplosions = (roomId: string, enabled: boolean = true) => {
     const roomRef = ref(database, `gameRooms/${roomId}`)
     const interval = setInterval(async () => {
       try {
-        // Quick check: if no bombs exist, skip transaction.
         const snapshot = await get(roomRef)
         const room = snapshot.val()
-        if (
-          !room ||
-          !room.bombs ||
-          !Array.isArray(room.bombs) ||
-          room.bombs.length === 0
-        ) {
-          return
-        }
-
-        // Introduce a small random delay to help reduce collisions.
-        const randomDelay = Math.floor(Math.random() * 200)
-        await new Promise((resolve) => setTimeout(resolve, randomDelay))
+        if (!room?.bombs?.length) return
 
         await runTransaction(roomRef, (currentRoom) => {
           if (!currentRoom) return currentRoom
-          const updatedRoom = applyBombExplosions(currentRoom)
-          return updatedRoom
+          return applyBombExplosions(currentRoom)
         })
-      } catch (error: unknown) {
-        if (error instanceof Error && error.message.includes('maxretry')) {
-          console.error('Bomb explosion transaction maxretry reached:', error)
-          // Optionally, you can choose to skip this cycle
-        } else {
-          console.error('Error during bomb explosion transaction:', error)
-        }
+      } catch (error) {
+        console.error('Error during bomb explosion transaction:', error)
       }
-    }, 1500) // Increase interval from 1000ms to 1500ms.
+    }, 1000) // Interval reduced to smoothly match bomb phases without overlaps
 
     return () => clearInterval(interval)
   }, [roomId, enabled])
