@@ -1,6 +1,13 @@
 // src/hooks/useGame.ts
 import { useState, useEffect, useRef } from 'react'
-import { ref, onValue, update, runTransaction, remove } from 'firebase/database'
+import {
+  ref,
+  onValue,
+  update,
+  runTransaction,
+  remove,
+  get,
+} from 'firebase/database'
 import { database } from '../firebase'
 import { Room, PlayerType } from '../type'
 import { useNavigate } from 'react-router-dom'
@@ -11,10 +18,10 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   const [timeLeft, setTimeLeft] = useState<number>(60)
   const navigate = useNavigate()
 
-  // Create a ref to store the latest roomState for event handlers.
+  // Ref to hold the latest room state for event handlers.
   const roomStateRef = useRef<Room | null>(null)
 
-  // Subscribe to room state updates from Firebase.
+  // Subscribe to room state updates.
   useEffect(() => {
     if (!roomId) return
     const roomRef = ref(database, `gameRooms/${roomId}`)
@@ -23,11 +30,11 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       setRoomState(data)
       roomStateRef.current = data
 
-      // If the room's status is "ended", mark gameOver.
+      // Mark game over if status is "ended".
       if (data && data.status === 'ended') {
         setGameOver(true)
       }
-      // If room status reverts to 'waiting', navigate back.
+      // Navigate to waiting if status becomes "waiting".
       if (data && data.status === 'waiting') {
         navigate('/waiting')
       }
@@ -35,7 +42,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     return () => unsubscribe()
   }, [roomId, navigate])
 
-  // Timer effect: start countdown when the game is in progress.
+  // Timer effect: count down when game is in progress.
   useEffect(() => {
     if (roomState && roomState.status === 'in-progress') {
       // Reset timer at game start.
@@ -55,26 +62,25 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       }, 1000)
       return () => clearInterval(timerInterval)
     }
-
+    // If roomState is null and game is over, navigate home.
     if (!roomState && gameOver) {
       navigate('/')
     }
-  }, [roomState?.status, roomId])
+  }, [roomState?.status, roomId, gameOver, navigate])
 
-  // Handle player movement and bomb planting via keydown events.
+  // Handle keyboard movement and bomb planting.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!roomId || !currentPlayer) return
 
-      // Prevent default behavior for arrow keys and space bar.
+      // Prevent default for arrow keys and space.
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.keyCode === 32) {
         e.preventDefault()
       }
 
-      // Do not process movement if the game is over.
       if (gameOver) return
 
-      // Bomb planting on space bar.
+      // Bomb planting with space bar.
       if (e.keyCode === 32) {
         handlePlantBomb()
         return
@@ -102,10 +108,10 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
           deltaX = 1
           break
         default:
-          return // ignore other keys
+          return
       }
 
-      // Use the ref to access the most recent room state.
+      // Use the ref to access the latest state.
       const latestRoomState = roomStateRef.current
       const playerState = latestRoomState?.players?.[currentPlayer]
       if (!playerState?.position) return
@@ -115,7 +121,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       const newX = oldX + deltaX
       const newY = oldY + deltaY
 
-      // Optional: Check for boundaries/obstacles.
+      // Optional: check for boundaries and obstacles.
       if (latestRoomState?.board) {
         const cell = latestRoomState.board[newY]?.[newX]
         if (!cell || cell.type === 'wall' || cell.type === 'obstacle') {
@@ -123,7 +129,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
         }
       }
 
-      // Update player's direction and position in Firebase.
+      // Update player's direction and position.
       const playerRef = ref(
         database,
         `gameRooms/${roomId}/players/${currentPlayer}`
@@ -137,6 +143,52 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [roomId, currentPlayer, gameOver])
+
+  // Mobile: Handle direction button presses.
+  const handleDirection = (direction: 'up' | 'down' | 'left' | 'right') => {
+    if (!roomId || !currentPlayer || gameOver) return
+    const latestRoomState = roomStateRef.current
+    const playerState = latestRoomState?.players?.[currentPlayer]
+    if (!playerState?.position) return
+
+    let deltaX = 0,
+      deltaY = 0
+    switch (direction) {
+      case 'up':
+        deltaY = -1
+        break
+      case 'down':
+        deltaY = 1
+        break
+      case 'left':
+        deltaX = -1
+        break
+      case 'right':
+        deltaX = 1
+        break
+      default:
+        return
+    }
+
+    const newX = playerState.position.x + deltaX
+    const newY = playerState.position.y + deltaY
+
+    if (latestRoomState?.board) {
+      const cell = latestRoomState.board[newY]?.[newX]
+      if (!cell || cell.type === 'wall' || cell.type === 'obstacle') {
+        return
+      }
+    }
+
+    const playerRef = ref(
+      database,
+      `gameRooms/${roomId}/players/${currentPlayer}`
+    )
+    update(playerRef, {
+      direction,
+      position: { x: newX, y: newY },
+    })
+  }
 
   // Bomb planting logic using a transaction.
   const handlePlantBomb = () => {
@@ -158,7 +210,6 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     runTransaction(bombsRef, (currentBombs) => {
       const now = Date.now()
       const bombsArray = Array.isArray(currentBombs) ? currentBombs : []
-      // Count active bombs for the current player (planted within last 3 sec)
       const playerActiveBombCount = bombsArray.filter(
         (b) => b.plantedBy === currentPlayer && now - b.plantedAt < 3000
       ).length
@@ -170,7 +221,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     })
   }
 
-  // Cleanup function to remove the current player's data.
+  // Cleanup: remove current player's data.
   const cleanupPlayer = async () => {
     if (!roomId) return
     const roomRef = ref(database, `gameRooms/${roomId}`)
@@ -220,6 +271,7 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
     handleExit,
     handleSendEmoji,
     handlePlantBomb,
+    handleDirection, // Expose for mobile button controls.
     gameOver,
     timeLeft,
   }

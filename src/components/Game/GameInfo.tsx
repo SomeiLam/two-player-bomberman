@@ -64,7 +64,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
       {/* Timer */}
       {!gameOver && (
         <div className="text-2xl sm:text-4xl font-bold text-white">
-          {timeLeft} second{timeLeft !== 1 && 's'}
+          {timeLeft}
         </div>
       )}
 

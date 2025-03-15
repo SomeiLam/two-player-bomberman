@@ -7,6 +7,7 @@ import GameBoard from '../components/Game/GameBoard'
 import GameInfo from '../components/Game/GameInfo'
 import { useGame } from '../hooks/useGame'
 import useBombExplosions from '../hooks/useBombExplosions'
+import ControlButtons from '../components/Game/ControlButtons'
 // Emoji reactions
 const emojis = ['😄', '😮', '😱', '🤪', '😎', '🤯', '❤️']
 const THRESHOLD = 100 * 1000
@@ -14,8 +15,15 @@ const THRESHOLD = 100 * 1000
 const GameScreen = () => {
   const { currentPlayer, roomId } = usePlayer()
   const navigate = useNavigate()
-  const { roomState, handleExit, handleSendEmoji, gameOver, timeLeft } =
-    useGame(roomId, currentPlayer)
+  const {
+    roomState,
+    handleExit,
+    handleSendEmoji,
+    handlePlantBomb,
+    handleDirection,
+    gameOver,
+    timeLeft,
+  } = useGame(roomId, currentPlayer)
 
   useBombExplosions(roomId, !gameOver)
 
@@ -45,7 +53,7 @@ const GameScreen = () => {
       {/* Game Board with Emoji Reactions - Responsive layout */}
       <div className="flex-1 flex justify-center items-center gap-4">
         <div
-          className="order-1 sm:order-2 flex items-center justify-center w-full overflow-hidden  "
+          className="order-1 sm:order-2 flex items-center justify-center w-full overflow-hidden"
           // Limit the containing box so it never exceeds 70% of the viewport height
           style={{ maxHeight: '70vh' }}
         >
@@ -82,6 +90,12 @@ const GameScreen = () => {
           </div>
         </div>
       </div>
+
+      {/* Mobile Controls: Direction Buttons & Plant Bomb (visible on mobile only) */}
+      <ControlButtons
+        handleDirection={handleDirection}
+        handlePlantBomb={handlePlantBomb}
+      />
 
       {/* Use the separate EmojiPanel component */}
       <EmojiPanel emojis={emojis} onEmojiSend={handleSendEmoji} />
