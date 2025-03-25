@@ -15,7 +15,7 @@ export const useWaitingRoom = (roomId: string, currentPlayer: PlayerType) => {
     const roomRef = ref(database, `gameRooms/${roomId}`)
     const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val()
-      if (!data.players) {
+      if (!data?.players) {
         navigate('/')
       }
       setRoomState(data)

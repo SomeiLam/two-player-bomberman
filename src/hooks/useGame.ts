@@ -14,6 +14,22 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   // Ref to hold the latest room state for event handlers.
   const roomStateRef = useRef<Room | null>(null)
   const gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const moveCooldownRef = useRef<boolean>(false)
+  const bombCooldownRef = useRef<boolean>(false)
+
+  // Generic helper function to perform an action with a specified cooldown.
+  const performAction = (
+    action: () => void,
+    cooldownRef: React.MutableRefObject<boolean>,
+    cooldownDuration: number
+  ) => {
+    if (cooldownRef.current) return
+    action() // Execute the action.
+    cooldownRef.current = true
+    setTimeout(() => {
+      cooldownRef.current = false
+    }, cooldownDuration)
+  }
 
   // Subscribe to room state updates.
   useEffect(() => {
@@ -75,69 +91,83 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
         e.preventDefault()
       }
 
+      // Bomb placement (space key) gets its own cooldown.
       if (e.key === ' ') {
-        handlePlantBomb()
+        performAction(
+          () => {
+            handlePlantBomb()
+          },
+          bombCooldownRef,
+          300
+        ) // Set bomb cooldown duration (e.g., 300ms).
         return
       }
 
-      let newDirection: 'up' | 'down' | 'left' | 'right' | null = null
-      let deltaX = 0
-      let deltaY = 0
+      // Wrap movement logic with cooldown.
+      performAction(
+        () => {
+          let newDirection: 'up' | 'down' | 'left' | 'right' | null = null
+          let deltaX = 0
+          let deltaY = 0
 
-      switch (e.key) {
-        case 'ArrowUp':
-          newDirection = 'up'
-          deltaY = -1
-          break
-        case 'ArrowDown':
-          newDirection = 'down'
-          deltaY = 1
-          break
-        case 'ArrowLeft':
-          newDirection = 'left'
-          deltaX = -1
-          break
-        case 'ArrowRight':
-          newDirection = 'right'
-          deltaX = 1
-          break
-        default:
-          return
-      }
+          switch (e.key) {
+            case 'ArrowUp':
+              newDirection = 'up'
+              deltaY = -1
+              break
+            case 'ArrowDown':
+              newDirection = 'down'
+              deltaY = 1
+              break
+            case 'ArrowLeft':
+              newDirection = 'left'
+              deltaX = -1
+              break
+            case 'ArrowRight':
+              newDirection = 'right'
+              deltaX = 1
+              break
+            default:
+              return
+          }
 
-      const latestRoomState = roomStateRef.current
-      const playerState = latestRoomState?.players?.[currentPlayer]
-      if (!playerState?.position) return
+          const latestRoomState = roomStateRef.current
+          const playerState = latestRoomState?.players?.[currentPlayer]
+          if (!playerState?.position) return
 
-      const newX = playerState.position.x + deltaX
-      const newY = playerState.position.y + deltaY
+          const newX = playerState.position.x + deltaX
+          const newY = playerState.position.y + deltaY
 
-      // Check boundaries, obstacles, and bombs
-      if (latestRoomState?.board) {
-        const cell = latestRoomState.board[newY]?.[newX]
-        const hasBomb = latestRoomState.bombs?.some(
-          (bomb) => bomb.x === newX && bomb.y === newY
-        )
+          // Check boundaries, obstacles, and bombs
+          if (latestRoomState?.board) {
+            const cell = latestRoomState.board[newY]?.[newX]
+            const hasBomb = latestRoomState.bombs?.some(
+              (bomb) => bomb.x === newX && bomb.y === newY
+            )
 
-        if (
-          !cell ||
-          cell.type === 'wall' ||
-          cell.type === 'obstacle' ||
-          hasBomb
-        ) {
-          return // Can't move into blocked cell
-        }
-      }
+            if (
+              !cell ||
+              cell.type === 'wall' ||
+              cell.type === 'obstacle' ||
+              hasBomb
+            ) {
+              return // Can't move into blocked cell
+            }
+          }
 
-      // Update player's position in Firebase
-      const playerRef = ref(
-        database,
-        `gameRooms/${roomId}/players/${currentPlayer}`
+          // Update player's position in Firebase
+          const playerRef = ref(
+            database,
+            `gameRooms/${roomId}/players/${currentPlayer}`
+          )
+          update(playerRef, {
+            direction: newDirection,
+            position: { x: newX, y: newY },
+          })
+        },
+        moveCooldownRef,
+        200
       )
-      update(playerRef, {
-        direction: newDirection,
-        position: { x: newX, y: newY },
-      })
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -147,81 +177,100 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
   // Mobile: Handle direction button presses.
   const handleDirection = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (!roomId || !currentPlayer || gameOver) return
-    const latestRoomState = roomStateRef.current
-    const playerState = latestRoomState?.players?.[currentPlayer]
-    if (!playerState?.position) return
+    performAction(
+      () => {
+        const latestRoomState = roomStateRef.current
+        const playerState = latestRoomState?.players?.[currentPlayer]
+        if (!playerState?.position) return
 
-    let deltaX = 0,
-      deltaY = 0
-    switch (direction) {
-      case 'up':
-        deltaY = -1
-        break
-      case 'down':
-        deltaY = 1
-        break
-      case 'left':
-        deltaX = -1
-        break
-      case 'right':
-        deltaX = 1
-        break
-      default:
-        return
-    }
+        let deltaX = 0,
+          deltaY = 0
+        switch (direction) {
+          case 'up':
+            deltaY = -1
+            break
+          case 'down':
+            deltaY = 1
+            break
+          case 'left':
+            deltaX = -1
+            break
+          case 'right':
+            deltaX = 1
+            break
+          default:
+            return
+        }
 
-    const newX = playerState.position.x + deltaX
-    const newY = playerState.position.y + deltaY
+        const newX = playerState.position.x + deltaX
+        const newY = playerState.position.y + deltaY
 
-    // Check boundaries, obstacles, and bombs
-    if (latestRoomState?.board) {
-      const cell = latestRoomState.board[newY]?.[newX]
-      const hasBomb = latestRoomState.bombs?.some(
-        (bomb) => bomb.x === newX && bomb.y === newY
-      )
+        // Check boundaries, obstacles, and bombs
+        if (latestRoomState?.board) {
+          const cell = latestRoomState.board[newY]?.[newX]
+          const hasBomb = latestRoomState.bombs?.some(
+            (bomb) => bomb.x === newX && bomb.y === newY
+          )
 
-      if (
-        !cell ||
-        cell.type === 'wall' ||
-        cell.type === 'obstacle' ||
-        hasBomb
-      ) {
-        return // Can't move into blocked cell
-      }
-    }
+          if (
+            !cell ||
+            cell.type === 'wall' ||
+            cell.type === 'obstacle' ||
+            hasBomb
+          ) {
+            return // Can't move into blocked cell
+          }
+        }
 
-    const playerRef = ref(
-      database,
-      `gameRooms/${roomId}/players/${currentPlayer}`
+        const playerRef = ref(
+          database,
+          `gameRooms/${roomId}/players/${currentPlayer}`
+        )
+        update(playerRef, {
+          direction,
+          position: { x: newX, y: newY },
+        })
+      },
+      moveCooldownRef,
+      200
     )
-    update(playerRef, {
-      direction,
-      position: { x: newX, y: newY },
-    })
   }
 
-  // Bomb planting logic using a transaction.
+  // Modified handlePlantBomb function with explosionTime.
   const handlePlantBomb = () => {
+    // If on cooldown, exit immediately.
+    if (bombCooldownRef.current) return
+    // Set the bomb on cooldown.
+    bombCooldownRef.current = true
+
     const latestRoomState = roomStateRef.current
     const currentPosition =
       currentPlayer === 'player1'
         ? latestRoomState?.players?.player1?.position
         : latestRoomState?.players?.player2?.position
-    if (!currentPosition) return
+    if (!currentPosition) {
+      bombCooldownRef.current = false // Reset if position not available.
+      return
+    }
 
+    // Set explosionTime to 3 seconds in the future.
+    const now = Date.now()
     const bomb = {
       x: currentPosition.x,
       y: currentPosition.y,
-      plantedAt: Date.now(),
+      plantedAt: now,
+      explosionTime: now + 3000, // Set explosion time at planting.
       plantedBy: currentPlayer,
+      exploded: false,
     }
 
     const bombsRef = ref(database, `gameRooms/${roomId}/bombs`)
     runTransaction(bombsRef, (currentBombs) => {
       const now = Date.now()
       const bombsArray = Array.isArray(currentBombs) ? currentBombs : []
+      // Count active bombs by checking if current time is before explosionTime.
       const playerActiveBombCount = bombsArray.filter(
-        (b) => b.plantedBy === currentPlayer && now - b.plantedAt < 3000
+        (b) => b.plantedBy === currentPlayer && now < b.explosionTime
       ).length
 
       if (playerActiveBombCount >= 3) {
@@ -229,6 +278,11 @@ export const useGame = (roomId: string, currentPlayer: PlayerType) => {
       }
       return [...bombsArray, bomb]
     })
+
+    // Reset bomb cooldown after 300ms.
+    setTimeout(() => {
+      bombCooldownRef.current = false
+    }, 300)
   }
 
   // Cleanup: remove current player's data.

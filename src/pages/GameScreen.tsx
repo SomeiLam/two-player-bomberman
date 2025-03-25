@@ -25,7 +25,11 @@ const GameScreen = () => {
     timeLeft,
   } = useGame(roomId, currentPlayer)
 
-  useBombExplosions(roomId, !gameOver)
+  useBombExplosions({
+    roomId,
+    enabled: !gameOver,
+    isHost: currentPlayer === 'player1',
+  })
 
   return (
     <div className="sm:h-dvh h-auto sm:min-h-full bg-slate-900 flex flex-col p-4 sm:p-8">

@@ -1,12 +1,11 @@
 import { BrickWall } from 'lucide-react'
-import React, { useEffect, useState } from 'react'
-import PlayerHelmet from '../../assets/PlayerHelmet'
+import React, { useEffect, useRef, useState } from 'react'
 import { Cell, UserIcon } from '../../type'
-import { getIconComponent } from '../getIconComponent'
 import player1Bomb from '../../assets/player1-bomb.svg'
 import player2Bomb from '../../assets/player2-bomb.svg'
 import expose from '../../assets/expose.svg'
 import './Game.css'
+import AnimatedPlayer from './AnimatedPlayer'
 
 interface Position {
   x: number
@@ -21,16 +20,20 @@ interface Player {
   direction: Direction
 }
 
+interface Bomb {
+  x: number
+  y: number
+  plantedAt: number
+  explosionTime: number // Fixed explosion time set at planting (e.g. plantedAt + 3000)
+  plantedBy: 'player1' | 'player2'
+  exploded?: boolean
+}
+
 interface GameBoardProps {
   board: Cell[][]
   player1: Player
   player2: Player
-  bombs?: {
-    x: number
-    y: number
-    plantedAt: number
-    plantedBy: 'player1' | 'player2'
-  }[] // Optional bomb positions
+  bombs?: Bomb[] // Updated bomb type with explosionTime and exploded flag.
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -41,25 +44,40 @@ const GameBoard: React.FC<GameBoardProps> = ({
 }) => {
   const cols = board[0]?.length || 0
 
-  // This state updates periodically to force a re-render
-  const [currentTime, setCurrentTime] = useState(Date.now())
+  const boardRef = useRef<HTMLDivElement>(null)
+  const [cellSize, setCellSize] = useState(50) // default size
 
+  // Calculate cell size based on container width and number of columns
+  useEffect(() => {
+    if (boardRef.current) {
+      const containerWidth = boardRef.current.clientWidth
+      setCellSize(containerWidth / cols)
+    }
+  }, [cols])
+
+  // Update current time periodically.
+  const [currentTime, setCurrentTime] = useState(Date.now())
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(Date.now())
-    }, 1000) // Update every second
+    }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Define removal delay for explosion overlay (in ms).
+  const removalDelay = 1000
+
   return (
     <div className="relative w-full h-full" style={{ maxHeight: '70vh' }}>
       {/* Board Grid */}
       <div
+        ref={boardRef}
         className="w-full h-full grid gap-1 bg-emerald-900/20 p-2 rounded-2xl"
         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
       >
         {board.map((row, i) =>
           row.map((cell, j) => {
-            // Render the base cell: wall, obstacle, or empty.
+            // Render base cell: wall, obstacle, or empty.
             const baseContent =
               cell.type === 'wall' ? (
                 <BrickWall className="w-full h-full scale-125 text-slate-600" />
@@ -69,189 +87,83 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 <div className="w-full h-full bg-emerald-600/20" />
               )
 
-            // Check if player1 and/or player2 are in this cell.
-            const inCellP1 =
-              player1.position.x === j && player1.position.y === i
-            const inCellP2 =
-              player2.position.x === j && player2.position.y === i
-
-            // Determine if this cell is affected by any explosion.
-            // For each bomb, if its age is between 3000 and 4000 ms and the cell
-            // is in the same row (|bomb.x - j| <= 1) or same column (|bomb.y - i| <= 1),
-            // then the explosion affects this cell.
-            const explosionInCell = bombs.some((bomb) => {
-              const bombAge = currentTime - bomb.plantedAt
-              if (bombAge >= 3000 && bombAge < 4000) {
-                // Check horizontal explosion (same row)
-                if (bomb.y === i && Math.abs(bomb.x - j) <= 1) return true
-                // Check vertical explosion (same column)
-                if (bomb.x === j && Math.abs(bomb.y - i) <= 1) return true
-              }
-              return false
-            })
-
-            // Render bombs that are still in pre-explosion state (bomb age < 3 seconds) and placed exactly in this cell.
-            const bombsInCell = bombs.filter(
-              (bomb) =>
-                bomb.x === j &&
-                bomb.y === i &&
-                currentTime - bomb.plantedAt < 3000
-            )
-
             return (
               <div
                 key={`${i}-${j}`}
-                className="aspect-square rounded-md flex items-center justify-center relative"
+                className="aspect-square rounded-md relative overflow-hidden"
               >
                 {baseContent}
 
-                {inCellP1 && inCellP2 ? (
-                  <>
+                {/* Render bomb icon if a bomb is placed in this cell and it hasn't exploded yet */}
+                {bombs
+                  .filter(
+                    (bomb) =>
+                      bomb.x === j &&
+                      bomb.y === i &&
+                      currentTime < bomb.explosionTime
+                  )
+                  .map((bomb) => (
                     <div
-                      style={{
-                        position: 'absolute',
-                        top: -8,
-                        left: -8,
-                        width: '70%',
-                        height: '70%',
-                        zIndex: 10,
-                      }}
+                      key={bomb.plantedAt}
+                      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20"
                     >
-                      <HelmetWithIcon
-                        player="1"
-                        icon={player1.icon || 'Cat'}
-                        direction={player1.direction}
+                      <img
+                        src={
+                          bomb.plantedBy === 'player1'
+                            ? player1Bomb
+                            : player2Bomb
+                        }
+                        alt="bomb"
+                        className="animate-bomb"
                       />
                     </div>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: -8,
-                        right: -8,
-                        width: '70%',
-                        height: '70%',
-                        zIndex: 10,
-                      }}
-                    >
-                      <HelmetWithIcon
-                        player="2"
-                        icon={player2.icon || 'Squirrel'}
-                        direction={player2.direction}
+                  ))}
+
+                {/* Render explosion overlay if a bomb in adjacent cells has exploded and is still in its explosion phase */}
+                {bombs.some((bomb) => {
+                  // Check if bomb is in its explosion phase: exploded and current time is within removal delay.
+                  if (
+                    bomb.exploded &&
+                    currentTime < bomb.explosionTime + removalDelay
+                  ) {
+                    // Check if the cell is in the explosion radius (adjacent horizontally or vertically)
+                    if (bomb.y === i && Math.abs(bomb.x - j) <= 1) return true
+                    if (bomb.x === j && Math.abs(bomb.y - i) <= 1) return true
+                  }
+                  return false
+                }) &&
+                  cell.type !== 'wall' && (
+                    <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center z-30">
+                      <img
+                        src={expose}
+                        alt="explosion"
+                        className="w-full h-full object-cover animate-explosion"
                       />
                     </div>
-                  </>
-                ) : inCellP1 ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      width: '70%',
-                      height: '70%',
-                      transform: 'translate(-50%, -50%)',
-                      zIndex: 10,
-                    }}
-                  >
-                    <HelmetWithIcon
-                      player="1"
-                      icon={player1.icon || 'Cat'}
-                      direction={player1.direction}
-                    />
-                  </div>
-                ) : inCellP2 ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      width: '70%',
-                      height: '70%',
-                      transform: 'translate(-50%, -50%)',
-                      zIndex: 10,
-                    }}
-                  >
-                    <HelmetWithIcon
-                      player="2"
-                      icon={player2.icon || 'Squirrel'}
-                      direction={player2.direction}
-                    />
-                  </div>
-                ) : null}
-
-                {/* Render bomb image if a bomb is placed in this cell and still pre-explosion */}
-                {bombsInCell.map((bomb) => (
-                  <div
-                    key={bomb.plantedAt}
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20"
-                  >
-                    <img
-                      src={
-                        bomb.plantedBy === 'player1' ? player1Bomb : player2Bomb
-                      }
-                      alt="bomb"
-                      className="animate-bomb"
-                    />
-                  </div>
-                ))}
-
-                {/* Render explosion overlay if this cell is affected by an explosion and it's not a wall */}
-                {explosionInCell && cell.type !== 'wall' && (
-                  <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center z-30">
-                    <img
-                      src={expose}
-                      alt="explosion"
-                      className="w-full h-full object-cover animate-explosion"
-                    />
-                  </div>
-                )}
+                  )}
               </div>
             )
           })
         )}
       </div>
+
+      {/* Render animated players over the board */}
+      <AnimatedPlayer
+        player="1"
+        position={player1.position}
+        cellSize={cellSize}
+        icon={player1.icon || 'Cat'}
+        direction={player1.direction}
+      />
+      <AnimatedPlayer
+        player="2"
+        position={player2.position}
+        cellSize={cellSize}
+        icon={player2.icon || 'Squirrel'}
+        direction={player2.direction}
+      />
     </div>
   )
 }
 
 export default GameBoard
-
-const HelmetWithIcon = ({
-  player,
-  icon,
-  direction,
-}: {
-  player: '1' | '2'
-  icon: UserIcon
-  direction: Direction
-}) => {
-  // Map direction to rotation degrees; default (down) is 0.
-  const rotationMapping: Record<Direction, number> = {
-    down: 180,
-    left: -90,
-    right: 90,
-    up: 0,
-  }
-
-  // Apply the rotation
-  const rotationDeg = rotationMapping[direction]
-
-  const IconComponent = getIconComponent(icon)
-  return (
-    <div
-      style={{ position: 'relative', transform: `rotate(${rotationDeg}deg)` }}
-    >
-      <PlayerHelmet player={player} />
-      <IconComponent
-        style={{
-          position: 'absolute',
-          top: '26%',
-          left: '50%',
-          transform: 'translate(-50%, 0%)',
-          width: '50%',
-          height: '50%',
-          color: 'black', // or any color
-        }}
-      />
-    </div>
-  )
-}

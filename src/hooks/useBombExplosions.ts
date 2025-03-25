@@ -4,24 +4,45 @@ import { ref, runTransaction, get } from 'firebase/database'
 import { database } from '../firebase'
 import { Room } from '../type'
 
-const applyBombExplosions = (room: Room): Room => {
+const removalDelay = 1000 // 1 second removal delay
+
+// Updated helper that uses a fixed timestamp.
+const applyBombExplosionsWithNow = (room: Room, now: number): Room => {
   if (!room || !room.board || !room.bombs || !room.players) return room
 
-  const now = Date.now()
   const bombsArray = Array.isArray(room.bombs) ? room.bombs : []
-  const bombsToRemove: number[] = []
+  let changed = false
 
-  bombsArray.forEach((bomb, index) => {
-    const bombAge = now - bomb.plantedAt
-
-    // Explode at exactly 3000ms (mark bomb as exploding)
-    if (bombAge >= 3000 && !bomb.exploded) {
-      bomb.exploded = true
-      bomb.explosionAt = now
+  // Mark bombs as exploded using the fixed "now"
+  const newBombs = bombsArray.map((bomb) => {
+    if (!bomb.exploded && now >= bomb.explosionTime) {
+      changed = true
+      return { ...bomb, exploded: true }
     }
+    return bomb
+  })
 
-    // Remove bomb & apply final state changes at 4000ms
-    if (bombAge >= 4000) {
+  // Filter out bombs that have been exploded long enough to be removed.
+  const bombsAfterRemoval = newBombs.filter((bomb) => {
+    if (bomb.exploded && now >= bomb.explosionTime + removalDelay) {
+      changed = true
+      return false
+    }
+    return true
+  })
+
+  if (!changed) {
+    return room
+  }
+
+  // Create a new room object with updated bombs.
+  const newRoom: Room = { ...room, bombs: bombsAfterRemoval }
+
+  let boardCloned = false
+
+  // Process explosion effects on board and players for bombs that are removed.
+  newBombs.forEach((bomb) => {
+    if (bomb.exploded && now >= bomb.explosionTime + removalDelay) {
       const explosionCoordinates = [
         [bomb.x, bomb.y],
         [bomb.x, bomb.y - 1],
@@ -30,78 +51,123 @@ const applyBombExplosions = (room: Room): Room => {
         [bomb.x + 1, bomb.y],
       ]
 
+      // Clone the board if we haven't already.
+      if (!boardCloned) {
+        newRoom.board = room?.board?.map((row) =>
+          row.map((cell) => ({ ...cell }))
+        )
+        boardCloned = true
+      }
+
       explosionCoordinates.forEach(([x, y]) => {
+        // Skip if out of bounds.
         if (
           y < 0 ||
-          y >= room.board!.length ||
+          !newRoom.board ||
+          y >= newRoom.board.length ||
           x < 0 ||
-          x >= room.board![0].length
+          x >= newRoom.board[0].length
         )
           return
 
-        const cell = room.board![y][x]
-
-        // Destroy obstacle now (at bomb removal time)
+        // Remove obstacles.
+        const cell = newRoom.board[y][x]
         if (cell.type === 'obstacle') {
           cell.type = 'empty'
         }
 
-        // Damage players now
-        const p1 = room.players!.player1
-        const p2 = room.players!.player2
-
-        if (p1?.position.x === x && p1?.position.y === y && p1.health > 0)
+        // Damage players if they're in the explosion radius.
+        const p1 = newRoom?.players?.player1
+        const p2 = newRoom?.players?.player2
+        if (p1 && p1.position.x === x && p1.position.y === y && p1.health > 0) {
           p1.health -= 1
-
-        if (p2?.position.x === x && p2?.position.y === y && p2.health > 0)
+          changed = true
+        }
+        if (p2 && p2.position.x === x && p2.position.y === y && p2.health > 0) {
           p2.health -= 1
+          changed = true
+        }
       })
-
-      // Schedule bomb removal
-      bombsToRemove.push(index)
     }
   })
 
-  // Remove expired bombs
-  bombsToRemove
-    .sort((a, b) => b - a)
-    .forEach((idx) => bombsArray.splice(idx, 1))
-
-  room.bombs = bombsArray
-
-  // End game if health is depleted
+  // End game if any player's health drops to zero.
   if (
-    (room.players.player1 && room.players.player1.health <= 0) ||
-    (room.players.player2 && room.players.player2.health <= 0)
+    (newRoom?.players?.player1 && newRoom.players.player1.health <= 0) ||
+    (newRoom?.players?.player2 && newRoom.players.player2.health <= 0)
   ) {
-    room.status = 'ended'
+    newRoom.status = 'ended'
   }
 
-  return room
+  return newRoom
 }
 
-const useBombExplosions = (roomId: string, enabled: boolean = true) => {
+interface UseBombExplosionsParams {
+  roomId: string
+  enabled?: boolean
+  isHost: boolean
+}
+
+const useBombExplosions = ({
+  roomId,
+  enabled = true,
+  isHost,
+}: UseBombExplosionsParams) => {
   useEffect(() => {
-    if (!roomId || !enabled) return
+    // Only allow the host (player1) to run bomb explosions.
+    if (!roomId || !enabled || !isHost) return
 
     const roomRef = ref(database, `gameRooms/${roomId}`)
     const interval = setInterval(async () => {
       try {
         const snapshot = await get(roomRef)
         const room = snapshot.val()
-        if (!room?.bombs?.length) return
+        // Only run transaction if at least one bomb is ready to explode.
+        if (
+          !room?.bombs?.some(
+            (bomb: { explosionTime: number }) =>
+              Date.now() >= bomb.explosionTime
+          )
+        ) {
+          return
+        }
 
+        // Capture a fixed timestamp to be used in all transaction attempts.
+        const capturedNow = Date.now()
+        let transactionAttempts = 0
         await runTransaction(roomRef, (currentRoom) => {
-          if (!currentRoom) return currentRoom
-          return applyBombExplosions(currentRoom)
+          transactionAttempts++
+          console.log(
+            `[Attempt ${transactionAttempts}] Current bombs:`,
+            JSON.stringify(currentRoom.bombs)
+          )
+          const updatedRoom = applyBombExplosionsWithNow(
+            currentRoom,
+            capturedNow
+          )
+          console.log(
+            `[Attempt ${transactionAttempts}] Updated bombs:`,
+            JSON.stringify(updatedRoom.bombs)
+          )
+          return updatedRoom
         })
+          .then((result) => {
+            console.log('Transaction committed:', result.committed)
+            console.log(
+              'Final room state:',
+              JSON.stringify(result.snapshot.val(), null, 2)
+            )
+          })
+          .catch((error) => {
+            console.error('Error during bomb explosion transaction:', error)
+          })
       } catch (error) {
         console.error('Error during bomb explosion transaction:', error)
       }
-    }, 1000) // Interval reduced to smoothly match bomb phases without overlaps
+    }, 1000)
 
     return () => clearInterval(interval)
-  }, [roomId, enabled])
+  }, [roomId, enabled, isHost])
 }
 
 export default useBombExplosions
